@@ -20,6 +20,10 @@
 // 输入框
 @property (nonatomic, strong) UITextField *holdAmountTextField;
 @property (nonatomic, strong) UITextField *holdProfitTextField;
+@property (nonatomic, strong) UITextField *valuationTrackTextField;
+
+// 估值跟踪错误提示
+@property (nonatomic, strong) UILabel *valuationTrackErrorLabel;
 
 // 保存按钮
 @property (nonatomic, strong) UIButton *saveButton;
@@ -95,6 +99,21 @@
     self.holdProfitTextField = (UITextField *)[holdProfitView viewWithTag:100];
     [self.contentView addSubview:holdProfitView];
 
+    // 估值跟踪输入框
+    UIView *valuationTrackView = [self createInputViewWithTitle:@"估值跟踪：" placeholder:@"请输入估值跟踪代码"];
+    self.valuationTrackTextField = (UITextField *)[valuationTrackView viewWithTag:100];
+    self.valuationTrackTextField.keyboardType = UIKeyboardTypeNumberPad;
+    [self.contentView addSubview:valuationTrackView];
+
+    // 估值跟踪错误提示
+    self.valuationTrackErrorLabel = [[UILabel alloc] init];
+    self.valuationTrackErrorLabel.text = @"跟踪代码无效，请重新输入";
+    self.valuationTrackErrorLabel.font = [UIFont systemFontOfSize:12];
+    self.valuationTrackErrorLabel.textColor = [UIColor systemRedColor];
+    self.valuationTrackErrorLabel.hidden = YES;
+    self.valuationTrackErrorLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.contentView addSubview:self.valuationTrackErrorLabel];
+
     // 保存按钮
     self.saveButton = [UIButton buttonWithType:UIButtonTypeSystem];
     [self.saveButton setTitle:@"保存" forState:UIControlStateNormal];
@@ -146,8 +165,18 @@
         [holdProfitView.trailingAnchor constraintEqualToAnchor:holdAmountView.trailingAnchor],
         [holdProfitView.heightAnchor constraintEqualToConstant:60],
 
+        // 估值跟踪
+        [valuationTrackView.topAnchor constraintEqualToAnchor:holdProfitView.bottomAnchor constant:20],
+        [valuationTrackView.leadingAnchor constraintEqualToAnchor:holdAmountView.leadingAnchor],
+        [valuationTrackView.trailingAnchor constraintEqualToAnchor:holdAmountView.trailingAnchor],
+        [valuationTrackView.heightAnchor constraintEqualToConstant:60],
+
+        // 估值跟踪错误提示
+        [self.valuationTrackErrorLabel.topAnchor constraintEqualToAnchor:valuationTrackView.bottomAnchor constant:6],
+        [self.valuationTrackErrorLabel.leadingAnchor constraintEqualToAnchor:valuationTrackView.leadingAnchor constant:4],
+
         // 保存按钮
-        [self.saveButton.topAnchor constraintEqualToAnchor:holdProfitView.bottomAnchor constant:40],
+        [self.saveButton.topAnchor constraintEqualToAnchor:valuationTrackView.bottomAnchor constant:40],
         [self.saveButton.leadingAnchor constraintEqualToAnchor:holdAmountView.leadingAnchor],
         [self.saveButton.trailingAnchor constraintEqualToAnchor:holdAmountView.trailingAnchor],
         [self.saveButton.heightAnchor constraintEqualToConstant:50],
@@ -227,6 +256,10 @@
         if (holdProfit && holdProfit != 0) {
             self.holdProfitTextField.text = [NSString stringWithFormat:@"%.2f", holdProfit];
         }
+
+        if (self.fund.valuationTrack.length > 0) {
+            self.valuationTrackTextField.text = self.fund.valuationTrack;
+        }
     }
 }
 
@@ -255,6 +288,16 @@
     CGFloat holdAmount = totalAmount - holdProfit;
 
     [self.fund setHoldAmount:@(holdAmount) forGroup:self.groupId];
+
+    // 保存估值跟踪（必须恰好6位才保存）
+    NSString *trackCode = self.valuationTrackTextField.text;
+    if (trackCode.length > 0 && trackCode.length != 6) {
+        [self showAlertWithMessage:@"跟踪代码必须为6位数字"];
+        return;
+    }
+    if (trackCode.length == 6) {
+        self.fund.valuationTrack = trackCode;
+    }
 
     // 计算收益率
     double profitRate = 0;
@@ -307,6 +350,24 @@
 }
 
 #pragma mark - UITextFieldDelegate
+
+- (BOOL)textField:(UITextField *)textField shouldChangeCharactersInRange:(NSRange)range replacementString:(NSString *)string {
+    if (textField != self.valuationTrackTextField) return YES;
+
+    // 只允许数字
+    NSCharacterSet *nonDigits = [[NSCharacterSet decimalDigitCharacterSet] invertedSet];
+    if ([string rangeOfCharacterFromSet:nonDigits].location != NSNotFound) return NO;
+
+    // 限制最多6位
+    NSString *newText = [textField.text stringByReplacingCharactersInRange:range withString:string];
+    if (newText.length > 6) return NO;
+
+    // 实时显示/隐藏错误提示
+    BOOL showError = newText.length > 0 && newText.length < 6;
+    self.valuationTrackErrorLabel.hidden = !showError;
+
+    return YES;
+}
 
 - (BOOL)textFieldShouldReturn:(UITextField *)textField {
     [textField resignFirstResponder];

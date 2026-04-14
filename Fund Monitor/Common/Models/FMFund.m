@@ -126,6 +126,7 @@
     [coder encodeObject:self.holdProfitByGroup forKey:@"holdProfitByGroup"];
     [coder encodeObject:self.holdProfitRateByGroup forKey:@"holdProfitRateByGroup"];
     [coder encodeObject:self.holdNetValueByGroup forKey:@"holdNetValueByGroup"];
+    [coder encodeObject:self.valuationTrack forKey:@"valuationTrack"];
 
     [coder encodeBool:self.isSelected forKey:@"isSelected"];
     [coder encodeObject:self.addTime forKey:@"addTime"];
@@ -154,6 +155,7 @@
         self.holdProfitByGroup = [[coder decodeObjectForKey:@"holdProfitByGroup"] mutableCopy];
         self.holdProfitRateByGroup = [[coder decodeObjectForKey:@"holdProfitRateByGroup"] mutableCopy];
         self.holdNetValueByGroup = [[coder decodeObjectForKey:@"holdNetValueByGroup"] mutableCopy];
+        self.valuationTrack = [coder decodeObjectForKey:@"valuationTrack"];
 
         // 如果没有新数据，初始化为空字典
         if (!self.holdAmountByGroup) {

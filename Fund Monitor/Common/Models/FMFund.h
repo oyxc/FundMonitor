@@ -40,6 +40,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSString *> *holdProfitRateByGroup;  // 按分组存储的收益率
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *holdNetValueByGroup;    // 按分组存储的持仓净值（成本净值）
 
+// 估值跟踪（全局，不区分分组）
+@property (nonatomic, copy) NSString *valuationTrack;
+
 // 自选相关
 @property (nonatomic, assign) BOOL isSelected;         // 是否已加入自选
 @property (nonatomic, strong) NSArray<NSString *> *groupIds;  // 所属分组ID数组（支持多个分组）

@@ -212,10 +212,14 @@
         return;
     }
 
-    NSArray *fundCodes = [self.funds valueForKey:@"fundCode"];
+    NSMutableArray *codes = [NSMutableArray array];
+    for (FMFund *fund in self.funds) {
+        if (fund.fundCode.length) [codes addObject:fund.fundCode];
+        if (fund.valuationTrack.length) [codes addObject:fund.valuationTrack];
+    }
     NSLog(@"开始读取");
     [self.indicatorView startAnimating];
-    [[FMNetworkManager sharedManager] fetchMultipleFundsEstimate:fundCodes success:^(id responseObject) {
+    [[FMNetworkManager sharedManager] fetchMultipleFundsEstimate:codes success:^(id responseObject) {
         [self.indicatorView stopAnimating];
         NSLog(@"读取完毕");
         if ([responseObject isKindOfClass:[NSArray class]]) {
@@ -224,11 +228,24 @@
             for (FMNetWorthModel *updatedFund in updatedFunds) {
                 for (NSInteger i = 0; i < self.funds.count; i++) {
                     FMFund *fund = self.funds[i];
-                    if ([fund.fundCode isEqualToString:updatedFund.fundCode]) {
-                        // 更新估值数据
-                        fund.estimateTime = updatedFund.estimateDate;
-                        fund.estimateValue = updatedFund.estimateNetValue;
+                    if (fund.valuationTrack.length && [fund.valuationTrack isEqualToString:updatedFund.fundCode]) {
+                        // 仅更新估值涨跌幅
+                        fund.estimateTime = updatedFund.estimateDate;                        
                         fund.estimateRate = updatedFund.estimateGrowthRate;
+                        double value = fund.latestValue.doubleValue + fund.latestValue.doubleValue * fund.estimateRate.doubleValue / 100;
+                        fund.estimateValue = @(value).stringValue;
+                        [[FMDataManager sharedManager] updateFund:fund];
+                        break;
+                    }
+
+                    if ([fund.fundCode isEqualToString:updatedFund.fundCode]) {
+                        if (fund.valuationTrack.length == 0) {
+                            // 更新估值数据
+                            fund.estimateTime = updatedFund.estimateDate;
+                            fund.estimateRate = updatedFund.estimateGrowthRate;
+                            fund.estimateValue = updatedFund.estimateNetValue;
+                        }
+                        
                         // 设置昨日数据
                         if (updatedFund.netValueDate.length) {
                             fund.latestTime = updatedFund.netValueDate;
