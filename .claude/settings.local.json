@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xcodebuild -workspace /Users/admin/Desktop/FundMonitorSwift/FundMonitorSwift.xcworkspace -scheme FundMonitorSwift -configuration Debug -destination 'id=9EEDA98A-F928-4377-AA36-7B782E4917C5' build)",
+      "WebFetch(domain:fund.eastmoney.com)"
+    ]
+  }
+}

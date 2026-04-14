@@ -1,0 +1,88 @@
+Fund Monitor/
+│
+├── 📱 MyFunds/                          # 自选模块
+│   ├── 🎮 Controllers/
+│   │   ├── FMMyFundsViewController.h
+│   │   ├── FMMyFundsViewController.m    ⭐ 自选基金列表主页
+│   │   ├── FMAddFundViewController.h
+│   │   ├── FMAddFundViewController.m    🔍 添加基金（搜索）
+│   │   ├── FMGroupManageViewController.h
+│   │   └── FMGroupManageViewController.m 📁 分组管理
+│   ├── 🎨 Views/
+│   │   ├── FMAssetCardView.h
+│   │   ├── FMAssetCardView.m           💰 资产卡片
+│   │   ├── FMListHeaderView.h
+│   │   ├── FMListHeaderView.m          📊 列表头部（排序）
+│   │   ├── FMFundCell.h
+│   │   └── FMFundCell.m                📋 基金单元格
+│   └── 📦 Models/
+│       ├── FMGroup.h
+│       └── FMGroup.m                    🏷️ 分组模型
+│
+├── 🔥 HotFunds/                         # 热门模块
+│   └── 🎮 Controllers/
+│       ├── FMHotFundsViewController.h
+│       └── FMHotFundsViewController.m   🔥 热门基金列表
+│
+├── ⚙️ Settings/                         # 设置模块
+│   └── 🎮 Controllers/
+│       ├── FMSettingsViewController.h
+│       ├── FMSettingsViewController.m   ⚙️ 设置主页
+│       ├── FMAboutViewController.h
+│       ├── FMAboutViewController.m      ℹ️ 关于页面
+│       ├── FMRefreshIntervalViewController.h
+│       └── FMRefreshIntervalViewController.m ⏱️ 刷新频率
+│
+├── 🔧 Common/                           # 公共模块
+│   ├── 🎮 Controllers/
+│   │   ├── FMMainTabBarController.h
+│   │   ├── FMMainTabBarController.m    🏠 主TabBar控制器
+│   │   ├── FMFundDetailViewController.h
+│   │   └── FMFundDetailViewController.m 📄 基金详情（共享）
+│   ├── 🎨 Views/
+│   │   ├── FMFunctionBarView.h
+│   │   └── FMFunctionBarView.m         🔘 功能栏
+│   ├── 📦 Models/
+│   │   ├── FMFund.h
+│   │   └── FMFund.m                    💼 基金模型
+│   └── 🛠️ Managers/
+│       ├── FMDataManager.h
+│       ├── FMDataManager.m             💾 数据管理
+│       ├── FMNetworkManager.h
+│       ├── FMNetworkManager.m          🌐 网络管理
+│       ├── FMSettingsManager.h
+│       └── FMSettingsManager.m         ⚙️ 设置管理
+│
+├── 📄 AppDelegate.h
+├── 📄 AppDelegate.m
+├── 📄 main.m
+├── 📋 Info.plist
+├── 🎨 Assets.xcassets/
+├── 📝 Base.lproj/
+├── 📖 PROJECT_STRUCTURE.md              # 项目结构文档
+├── 📖 STRUCTURE.md                      # 文件移动记录
+└── 📖 DIRECTORY_TREE.txt                # 目录树（本文件）
+
+═══════════════════════════════════════════════════════════════
+
+📊 统计信息：
+  - 模块数：4个（MyFunds, HotFunds, Settings, Common）
+  - ViewController：8个
+  - 自定义 View：4个
+  - Model：2个
+  - Manager：3个
+  - 总文件数：36个源文件（.h + .m）
+
+🎯 模块职责：
+  - MyFunds：自选基金管理、分组、资产统计
+  - HotFunds：热门基金展示
+  - Settings：应用设置、主题、刷新频率
+  - Common：共享组件、数据管理、网络服务
+
+🔗 模块依赖：
+  MyFunds → Common (Managers, Models)
+  HotFunds → Common (Managers, Models, Views/FMFundCell)
+  Settings → Common (Managers)
+  All → Common/Controllers/FMFundDetailViewController
+
+═══════════════════════════════════════════════════════════════

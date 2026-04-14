@@ -1,0 +1,16 @@
+//
+//  Tiqmo_pch
+//  Tiqmo
+//
+//  Created by oyxc on 2020/6/9.
+//  Copyright © 2020年 SwiftPass. All rights reserved.
+//
+
+#ifndef Tiqmo_pch
+#define Tiqmo_pch
+
+// 常量 const
+#import "FundConst.h"
+
+
+#endif /* Tiqmo_pch */
