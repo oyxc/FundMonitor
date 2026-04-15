@@ -200,8 +200,20 @@
     fund.latestValue = hotFund.unitNetValue;
     fund.latestRate = hotFund.rate6Month;
 
+    // 将整个热门基金列表转换为 FMFund 数组，用于侧滑切换
+    NSMutableArray<FMFund *> *fundList = [NSMutableArray arrayWithCapacity:self.hotFunds.count];
+    for (FMHotFundModel *model in self.hotFunds) {
+        FMFund *f = [FMFund fundWithCode:model.fundCode name:model.fundName];
+        f.fundType = model.fundType;
+        f.latestValue = model.unitNetValue;
+        f.latestRate = model.rate6Month;
+        [fundList addObject:f];
+    }
+
     FMFundDetailViewController *vc = [[FMFundDetailViewController alloc] init];
     vc.fund = fund;
+    vc.fundList = [fundList copy];
+    vc.currentIndex = indexPath.row;
     [self.navigationController pushViewController:vc animated:YES];
 }
 

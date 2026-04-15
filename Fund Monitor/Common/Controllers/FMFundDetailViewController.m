@@ -67,6 +67,7 @@ typedef NS_ENUM(NSInteger, FMDetailTabType) {
 
     [self setupNavigationBar];
     [self setupUI];
+    [self setupSwipeGestures];
     [self loadFundDetail];
 
     // 监听主题变更
@@ -78,6 +79,52 @@ typedef NS_ENUM(NSInteger, FMDetailTabType) {
 
 - (void)dealloc {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
+}
+
+#pragma mark - Swipe Gestures
+
+- (void)setupSwipeGestures {
+    UISwipeGestureRecognizer *swipeLeft = [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(handleSwipeLeft:)];
+    swipeLeft.direction = UISwipeGestureRecognizerDirectionLeft;
+    [self.view addGestureRecognizer:swipeLeft];
+
+    UISwipeGestureRecognizer *swipeRight = [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(handleSwipeRight:)];
+    swipeRight.direction = UISwipeGestureRecognizerDirectionRight;
+    [self.view addGestureRecognizer:swipeRight];
+}
+
+- (void)handleSwipeLeft:(UISwipeGestureRecognizer *)gesture {
+    if (self.fundList.count == 0) return;
+    NSInteger nextIndex = (self.currentIndex + 1) % (NSInteger)self.fundList.count;
+    [self switchToFundAtIndex:nextIndex direction:1];
+}
+
+- (void)handleSwipeRight:(UISwipeGestureRecognizer *)gesture {
+    if (self.fundList.count == 0) return;
+    NSInteger prevIndex = (self.currentIndex - 1 + (NSInteger)self.fundList.count) % (NSInteger)self.fundList.count;
+    [self switchToFundAtIndex:prevIndex direction:-1];
+}
+
+// direction: 1 = 向左切换（下一只），-1 = 向右切换（上一只）
+- (void)switchToFundAtIndex:(NSInteger)index direction:(NSInteger)direction {
+    self.currentIndex = index;
+    self.fund = self.fundList[index];
+    self.detailModel = nil;
+
+    CGFloat width = self.view.bounds.size.width;
+
+    [UIView animateWithDuration:0.2 animations:^{
+        self.mainScrollView.transform = CGAffineTransformMakeTranslation(-direction * width, 0);
+        self.mainScrollView.alpha = 0;
+    } completion:^(BOOL finished) {
+        self.mainScrollView.transform = CGAffineTransformMakeTranslation(direction * width, 0);
+        [self.mainScrollView setContentOffset:CGPointZero animated:NO];
+        [self loadFundDetail];
+        [UIView animateWithDuration:0.2 animations:^{
+            self.mainScrollView.transform = CGAffineTransformIdentity;
+            self.mainScrollView.alpha = 1;
+        }];
+    }];
 }
 
 #pragma mark - Setup UI

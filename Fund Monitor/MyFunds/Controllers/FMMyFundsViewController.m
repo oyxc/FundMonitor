@@ -487,6 +487,8 @@
     FMFundDetailViewController *vc = [[FMFundDetailViewController alloc] init];
     vc.fund = fund;
     vc.groupId = self.currentGroup.groupId;  // 传递当前分组ID
+    vc.fundList = [self.funds copy];
+    vc.currentIndex = indexPath.row;
     [self.navigationController pushViewController:vc animated:YES];
 }
 
