@@ -859,11 +859,15 @@
     if (syl_3y) fund.threeMonthRate = @([syl_3y doubleValue]);
     if (syl_1y) fund.monthRate = @([syl_1y doubleValue]);
 
+    // 解析 Data_ACWorthTrend
+    NSArray *netACWorthTrend = [self extractJSONArray:@"Data_ACWorthTrend" fromString:jsString];
+    
     // 解析 Data_netWorthTrend
     NSArray *netWorthTrendData = [self extractJSONArray:@"Data_netWorthTrend" fromString:jsString];
     if (netWorthTrendData) {
         NSMutableArray<FMNetWorthTrendData *> *trendDataArray = [NSMutableArray array];
-        for (NSDictionary *item in netWorthTrendData) {
+        for (int netIndex = 0; netIndex < netWorthTrendData.count; ++netIndex) {
+            NSDictionary *item = netWorthTrendData[netIndex];
             if ([item isKindOfClass:[NSDictionary class]]) {
                 NSNumber *timestamp = item[@"x"];
                 NSNumber *netWorth = item[@"y"];
@@ -875,6 +879,11 @@
                                                                            equityReturn:equityReturn
                                                                               unitMoney:unitMoney];
                 [trendDataArray addObject:trendData];
+                
+                if (netACWorthTrend.count > netIndex) {
+                    NSArray *object = netACWorthTrend[netIndex];
+                    trendData.netWorth = object.lastObject;
+                }
             }
         }
         fund.netWorthTrendData = trendDataArray;
