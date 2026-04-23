@@ -13,6 +13,44 @@
 #import "FMCrosshairView.h"
 #import <DGCharts/DGCharts-Swift.h>
 
+// Y轴自定义格式化器
+@interface FMYAxisValueFormatter : NSObject <ChartAxisValueFormatter>
+@property (nonatomic, assign) BOOL isPercentage; // 是否显示为百分比
+@end
+
+@implementation FMYAxisValueFormatter
+
+- (NSString *)stringForValue:(double)value axis:(ChartAxisBase *)axis {
+    if (self.isPercentage) {
+        return [NSString stringWithFormat:@"%.2f%%", value];
+    } else {
+        return [NSString stringWithFormat:@"%.4f", value];
+    }
+}
+
+@end
+
+// X轴自定义格式化器 - 只显示指定索引的标签
+@interface FMXAxisValueFormatter : NSObject <ChartAxisValueFormatter>
+@property (nonatomic, strong) NSArray<NSString *> *dateStrings; // 所有日期字符串
+@property (nonatomic, assign) NSInteger labelCount; // 标签数量
+@property (nonatomic, assign) NSInteger dataCount; // 数据总数
+@end
+
+@implementation FMXAxisValueFormatter
+
+- (NSString *)stringForValue:(double)value axis:(ChartAxisBase *)axis {
+    NSInteger index = (NSInteger)round(value);
+
+    if (index >= 0 && index < self.dateStrings.count) {
+        return self.dateStrings[index];
+    }
+
+    return @"";
+}
+
+@end
+
 @interface FMFundChartView () <ChartViewDelegate, UIGestureRecognizerDelegate>
 
 @property (nonatomic, strong) LineChartView *chartView;
@@ -98,12 +136,27 @@
     xAxis.drawGridLinesEnabled = NO;
     xAxis.granularity = 1.0;
     xAxis.labelTextColor = [UIColor secondaryLabelColor];
+    xAxis.labelCount = 3;  // 固定显示3个标签
+    xAxis.forceLabelsEnabled = YES;  // 强制显示指定数量的标签
+    xAxis.avoidFirstLastClippingEnabled = YES;  // 避免首尾标签被裁剪
+    xAxis.drawLimitLinesBehindDataEnabled = YES;
 
     // 左Y轴配置
     ChartYAxis *leftAxis = self.chartView.leftAxis;
     leftAxis.drawGridLinesEnabled = YES;
     leftAxis.gridColor = [[UIColor separatorColor] colorWithAlphaComponent:0.3];
     leftAxis.labelTextColor = [UIColor secondaryLabelColor];
+
+    // 固定显示5个标签
+    leftAxis.labelCount = 5;
+    leftAxis.forceLabelsEnabled = YES;
+    leftAxis.drawTopYLabelEntryEnabled = YES;  // 显示顶部标签
+    leftAxis.drawBottomYLabelEntryEnabled = YES;  // 显示底部标签
+
+    // 设置Y轴自定义格式化器（默认不显示百分比）
+    FMYAxisValueFormatter *yAxisFormatter = [[FMYAxisValueFormatter alloc] init];
+    yAxisFormatter.isPercentage = YES;
+    leftAxis.valueFormatter = yAxisFormatter;
 
     // 右Y轴配置
     self.chartView.rightAxis.enabled = NO;
@@ -121,19 +174,55 @@
         return;
     }
 
+    // 数据优化：过滤掉日期小于最后一天日期的前置数据
+    NSArray *filteredData = [self filterDataByLastDayOfMonth:self.netWorthTrendData];
+    if (filteredData.count == 0) {
+        self.chartView.data = nil;
+        [self.chartView notifyDataSetChanged];
+        self.showDataList = nil;
+        return;
+    }
+
+    // 净值图表使用百分比格式
+    FMYAxisValueFormatter *yAxisFormatter = [[FMYAxisValueFormatter alloc] init];
+    yAxisFormatter.isPercentage = YES;
+    self.chartView.leftAxis.valueFormatter = yAxisFormatter;
+
     // 准备数据
     NSMutableArray *dataList = [NSMutableArray array];
     NSMutableArray<ChartDataEntry *> *entries = [NSMutableArray array];
     NSMutableArray *valueList = [NSMutableArray array];
 
-    for (NSInteger i = 0; i < self.netWorthTrendData.count; i++) {
-        FMNetWorthTrendData *data = self.netWorthTrendData[i];
+    // 获取第一个净值作为基准
+    double baseNetWorth = 0;
+    for (FMNetWorthTrendData *data in filteredData) {
         if (data.netWorth) {
-            double value = [data.netWorth doubleValue];
-            ChartDataEntry *entry = [[ChartDataEntry alloc] initWithX:i y:value];
+            baseNetWorth = [data.netWorth doubleValue];
+            break;
+        }
+    }
+
+    if (baseNetWorth == 0) {
+        self.chartView.data = nil;
+        [self.chartView notifyDataSetChanged];
+        return;
+    }
+
+    // 计算相对于第一个净值的百分比变化，并赋值给 model
+    for (NSInteger i = 0; i < filteredData.count; i++) {
+        FMNetWorthTrendData *data = filteredData[i];
+        if (data.netWorth) {
+            double currentNetWorth = [data.netWorth doubleValue];
+            // 计算百分比变化: ((当前值 - 基准值) / 基准值) * 100
+            double percentageChange = ((currentNetWorth - baseNetWorth) / baseNetWorth) * 100.0;
+
+            // 将累计涨幅赋值给 model
+            data.cumulativeChange = @(percentageChange);
+
+            ChartDataEntry *entry = [[ChartDataEntry alloc] initWithX:i y:percentageChange];
             [entries addObject:entry];
             [dataList addObject:data];
-            [valueList addObject:@(value)];
+            [valueList addObject:@(percentageChange)];
         }
     }
     self.showDataList = dataList;
@@ -167,8 +256,8 @@
     // 设置数据到图表
     self.chartView.data = chartData;
 
-    // 配置X轴标签
-    [self configureXAxisLabelsForNetWorthTrend];
+    // 配置X轴标签（使用过滤后的数据）
+    [self configureXAxisLabelsForNetWorthTrendWithData:filteredData];
 
     // 重置缩放，确保所有数据可见
     [self.chartView fitScreen];
@@ -183,43 +272,64 @@
 }
 
 // 配置净值走势数据的X轴标签
-- (void)configureXAxisLabelsForNetWorthTrend {
-    if (!self.netWorthTrendData || self.netWorthTrendData.count == 0) {
+- (void)configureXAxisLabelsForNetWorthTrendWithData:(NSArray *)dataArray {
+    if (!dataArray || dataArray.count == 0) {
         return;
     }
 
     ChartXAxis *xAxis = self.chartView.xAxis;
 
-    // 保存当前日期标签（用于 marker 显示）
-    self.currentDateLabels = [self getDateLabelsForNetWorthTrend];
-    xAxis.axisMaxLabels = 2;
-    xAxis.labelCount = 2; // 设置标签数量
-    
-    // 设置X轴标签格式化器（使用均匀分布的日期）
-    xAxis.valueFormatter = [[ChartIndexAxisValueFormatter alloc] initWithValues:self.currentDateLabels];
+    // 获取所有日期字符串
+    NSMutableArray<NSString *> *allDateStrings = [NSMutableArray array];
+    for (FMNetWorthTrendData *data in dataArray) {
+        if (data.dateString && data.dateString.length >= 10) {
+            [allDateStrings addObject:data.dateString];
+        } else {
+            [allDateStrings addObject:@""];
+        }
+    }
 
-    // 使用自动调整，使用我们指定的标签
+    // 创建自定义格式化器
+    FMXAxisValueFormatter *formatter = [[FMXAxisValueFormatter alloc] init];
+    formatter.dateStrings = allDateStrings;
+    formatter.labelCount = 3;
+    formatter.dataCount = dataArray.count;
+
+    // 设置X轴标签格式化器
+    xAxis.valueFormatter = formatter;
+
+    // 设置 X 轴范围和标签
+    xAxis.axisMinimum = 0;
+    xAxis.axisMaximum = dataArray.count - 1;
+
+    // 确保强制显示3个标签
+    [xAxis setLabelCount:3 force:YES];
     xAxis.granularityEnabled = YES;
-    xAxis.forceLabelsEnabled = YES;
+    xAxis.granularity = 1.0;
+    xAxis.avoidFirstLastClippingEnabled = YES;
+
+    // 保存当前日期标签（用于 marker 显示）
+    self.currentDateLabels = allDateStrings;
 }
 
-// 获取净值走势数据的日期标签
-- (NSArray<NSString *> *)getDateLabelsForNetWorthTrend {
+// 获取净值走势数据的日期标签（固定3个：第一个、中间、最后一个）
+- (NSArray<NSString *> *)getDateLabelsForNetWorthTrendWithData:(NSArray *)dataArray {
     NSMutableArray<NSString *> *labels = [NSMutableArray array];
-    NSInteger dataCount = self.netWorthTrendData.count;
+    NSInteger dataCount = dataArray.count;
 
     if (dataCount == 0) {
         return labels;
     }
-    
-    NSArray *indexList = [self getIndexListWithCount:5 dataCount:dataCount];
+
+    // 固定显示3个标签：第一个(0)、中间、最后一个
+    NSArray *indexList = [self getIndexListWithCount:3 dataCount:dataCount];
 
     // 为每个数据点创建标签
     for (NSInteger i = 0; i < dataCount; i++) {
-        FMNetWorthTrendData *data = self.netWorthTrendData[i];
-        if ([indexList containsObject:@(i)] && data.timestamp && data.dateString.length > 5) {
-            // 将时间戳转换为日期字符串 MM-dd
-            NSString *dateString = [data.dateString substringFromIndex:5];
+        FMNetWorthTrendData *data = dataArray[i];
+        if ([indexList containsObject:@(i)] && data.timestamp && data.dateString.length >= 10) {
+            // 使用完整的日期字符串 yyyy-MM-dd
+            NSString *dateString = data.dateString;
             [labels addObject:dateString];
         } else {
             [labels addObject:@""];
@@ -253,6 +363,11 @@
         return;
     }
 
+    // 累计收益图表使用百分比格式
+    FMYAxisValueFormatter *yAxisFormatter = [[FMYAxisValueFormatter alloc] init];
+    yAxisFormatter.isPercentage = YES;
+    self.chartView.leftAxis.valueFormatter = yAxisFormatter;
+
     NSMutableArray *dataList = [NSMutableArray array];
     NSMutableArray<LineChartDataSet *> *dataSets = [NSMutableArray array];
     NSInteger maxDataCount = 0;
@@ -276,26 +391,47 @@
         NSMutableArray<ChartDataEntry *> *entries = [NSMutableArray array];
         NSInteger totalCount = grandTotal.data.count;
         NSInteger dataCount = MIN(showCount, totalCount);
-        
+
         NSArray *netData = [grandTotal.data subarrayWithRange:NSMakeRange(totalCount - dataCount, dataCount)];
-        [dataList addObject:netData];
-        
-        for (NSInteger i = 0; i < dataCount; i++) {
+
+        // 数据优化：过滤掉日期小于最后一天日期的前置数据
+        netData = [self filterDataByLastDayOfMonth:netData];
+        if (netData.count == 0) {
+            continue;
+        }
+
+        // 获取区间第一个数据作为基准
+        double baseValue = 0;
+        if (netData.count > 0) {
+            FMGrandTotalDataItem *firstItem = netData.firstObject;
+            baseValue = [firstItem.totalReturn doubleValue];
+        }
+
+        // 计算相对于第一天的累计涨幅，并赋值给 model
+        for (NSInteger i = 0; i < netData.count; i++) {
             FMGrandTotalDataItem *item = netData[i];
             if (item.totalReturn) {
-                double value = [item.totalReturn doubleValue];
-                ChartDataEntry *entry = [[ChartDataEntry alloc] initWithX:i y:value];
+                double currentValue = [item.totalReturn doubleValue];
+                // 计算相对于区间第一天的累计涨幅
+                double cumulativeChange = currentValue - baseValue;
+
+                // 将累计涨幅赋值给 model
+                item.cumulativeChange = @(cumulativeChange);
+
+                ChartDataEntry *entry = [[ChartDataEntry alloc] initWithX:i y:cumulativeChange];
                 [entries addObject:entry];
             }
         }
+
+        [dataList addObject:netData];
 
         if (entries.count == 0) {
             continue;
         }
 
         // 记录最大数据点数量（用于X轴标签）
-        if (dataCount > maxDataCount) {
-            maxDataCount = dataCount;
+        if (netData.count > maxDataCount) {
+            maxDataCount = netData.count;
         }
 
         // 创建数据集
@@ -360,21 +496,41 @@
     }
 
     ChartXAxis *xAxis = self.chartView.xAxis;
-    
-    // 保存当前日期标签（用于 marker 显示）
-    self.currentDateLabels = [self getDateLabelsForGrandTotalWithList:list];
-    xAxis.axisMaxLabels = 2;
-    xAxis.labelCount = 2; // 设置标签数量
-    
-    // 设置X轴标签格式化器
-    xAxis.valueFormatter = [[ChartIndexAxisValueFormatter alloc] initWithValues:self.currentDateLabels];
 
-    // 使用自动调整
+    // 获取所有日期字符串
+    NSMutableArray<NSString *> *allDateStrings = [NSMutableArray array];
+    for (FMGrandTotalDataItem *item in list) {
+        if (item.dateString && item.dateString.length >= 10) {
+            [allDateStrings addObject:item.dateString];
+        } else {
+            [allDateStrings addObject:@""];
+        }
+    }
+
+    // 创建自定义格式化器
+    FMXAxisValueFormatter *formatter = [[FMXAxisValueFormatter alloc] init];
+    formatter.dateStrings = allDateStrings;
+    formatter.labelCount = 3;
+    formatter.dataCount = list.count;
+
+    // 设置X轴标签格式化器
+    xAxis.valueFormatter = formatter;
+
+    // 设置 X 轴范围和标签
+    xAxis.axisMinimum = 0;
+    xAxis.axisMaximum = list.count - 1;
+
+    // 确保强制显示3个标签
+    [xAxis setLabelCount:3 force:YES];
     xAxis.granularityEnabled = YES;
-    xAxis.forceLabelsEnabled = YES;
+    xAxis.granularity = 1.0;
+    xAxis.avoidFirstLastClippingEnabled = YES;
+
+    // 保存当前日期标签（用于 marker 显示）
+    self.currentDateLabels = allDateStrings;
 }
 
-// 获取累计收益数据的日期标签
+// 获取累计收益数据的日期标签（固定3个：第一个、中间、最后一个）
 - (NSArray<NSString *> *)getDateLabelsForGrandTotalWithList:(NSArray *)list {
     NSMutableArray<NSString *> *labels = [NSMutableArray array];
     if (!list || list.count == 0) {
@@ -383,12 +539,15 @@
 
     NSInteger dataCount = list.count;
 
+    // 固定显示3个标签：第一个(0)、中间、最后一个
+    NSArray *indexList = [self getIndexListWithCount:3 dataCount:dataCount];
+
     // 为每个数据点创建标签
     for (NSInteger i = 0; i < dataCount; i++) {
         FMGrandTotalDataItem *item = list[i];
-        if (item.timestamp && item.dateString.length > 5) {
-            // 将时间戳转换为日期字符串 MM-dd
-            NSString *dateString = [item.dateString substringFromIndex:5];
+        if ([indexList containsObject:@(i)] && item.timestamp && item.dateString.length >= 10) {
+            // 使用完整的日期字符串 yyyy-MM-dd
+            NSString *dateString = item.dateString;
             [labels addObject:dateString];
         } else {
             [labels addObject:@""];
@@ -476,6 +635,69 @@
                                                           axis:AxisDependencyLeft];
 
     return highlight;
+}
+
+#pragma mark - Data Filter
+
+// 过滤数据：剔除日期小于最后一天日期的前置数据
+- (NSArray *)filterDataByLastDayOfMonth:(NSArray *)dataArray {
+    if (!dataArray || dataArray.count == 0) {
+        return dataArray;
+    }
+
+    // 获取最后一条数据的日期（天数）
+    id lastData = dataArray.lastObject;
+    NSInteger lastDayOfMonth = 0;
+
+    if ([lastData isKindOfClass:[FMNetWorthTrendData class]]) {
+        FMNetWorthTrendData *data = (FMNetWorthTrendData *)lastData;
+        lastDayOfMonth = [self getDayOfMonthFromDateString:data.dateString];
+    } else if ([lastData isKindOfClass:[FMGrandTotalDataItem class]]) {
+        FMGrandTotalDataItem *item = (FMGrandTotalDataItem *)lastData;
+        lastDayOfMonth = [self getDayOfMonthFromDateString:item.dateString];
+    }
+
+    if (lastDayOfMonth == 0) {
+        return dataArray;
+    }
+
+    // 从第一个开始遍历，找到第一个日期大于等于最后一天日期的位置
+    NSInteger startIndex = 0;
+    for (NSInteger i = 0; i < dataArray.count; i++) {
+        id data = dataArray[i];
+        NSInteger currentDay = 0;
+
+        if ([data isKindOfClass:[FMNetWorthTrendData class]]) {
+            FMNetWorthTrendData *netData = (FMNetWorthTrendData *)data;
+            currentDay = [self getDayOfMonthFromDateString:netData.dateString];
+        } else if ([data isKindOfClass:[FMGrandTotalDataItem class]]) {
+            FMGrandTotalDataItem *item = (FMGrandTotalDataItem *)data;
+            currentDay = [self getDayOfMonthFromDateString:item.dateString];
+        }
+
+        if (currentDay >= lastDayOfMonth) {
+            startIndex = i;
+            break;
+        }
+    }
+
+    // 返回过滤后的数据
+    if (startIndex > 0 && startIndex < dataArray.count) {
+        return [dataArray subarrayWithRange:NSMakeRange(startIndex, dataArray.count - startIndex)];
+    }
+
+    return dataArray;
+}
+
+// 从日期字符串中提取天数（格式：yyyy-MM-dd）
+- (NSInteger)getDayOfMonthFromDateString:(NSString *)dateString {
+    if (!dateString || dateString.length < 10) {
+        return 0;
+    }
+
+    // 提取日期部分（最后两位）
+    NSString *dayString = [dateString substringFromIndex:8]; // "2024-04-22" -> "22"
+    return [dayString integerValue];
 }
 
 #pragma mark - UIGestureRecognizerDelegate

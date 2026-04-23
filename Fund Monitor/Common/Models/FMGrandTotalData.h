@@ -16,6 +16,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 //自定义属性
 @property (nonatomic, copy) NSString *dateString;       //转换后的时间
+@property (nonatomic, strong) NSNumber *cumulativeChange; // 相对于区间第一天的累计涨幅（百分比）
 
 + (instancetype)itemWithTimestamp:(NSNumber *)timestamp totalReturn:(NSNumber *)totalReturn;
 

@@ -403,8 +403,12 @@ typedef NS_ENUM(NSInteger, FMDetailTabType) {
         // 更新日期
         self.publicDateLabel.text = [latestData dateString];
         self.publicDateLabel.textColor = [UIColor secondaryLabelColor];
-        // 更新单位净值
-        self.publicNetWorthLabel.text = [NSString stringWithFormat:@"单位净值:%.4f", [latestData.netWorth doubleValue]];
+
+        // 直接使用 model 中预先计算好的累计涨幅
+        double cumulativeChange = [latestData.cumulativeChange doubleValue];
+        NSString *sign = cumulativeChange >= 0 ? @"+" : @"";
+        self.publicNetWorthLabel.text = [NSString stringWithFormat:@"累计涨幅:%@%.2f%%", sign, cumulativeChange];
+
         // 更新日涨幅
         double dayRate = [latestData.equityReturn doubleValue];// dayRate
         NSString *rateText = [NSString stringWithFormat:@"日涨幅:%.2f%%", dayRate];
@@ -412,7 +416,7 @@ typedef NS_ENUM(NSInteger, FMDetailTabType) {
 
         // 根据涨跌设置颜色
         [self updateLabelColorWithValue:dayRate label:self.publicDayRateLabel];
-        [self updateLabelColorWithValue:dayRate label:self.publicNetWorthLabel];
+        [self updateLabelColorWithValue:cumulativeChange label:self.publicNetWorthLabel];
     }
     //
     else if ([object isKindOfClass:NSArray.class]) {
@@ -421,24 +425,24 @@ typedef NS_ENUM(NSInteger, FMDetailTabType) {
 
         if (source.count > 0) {
             FMGrandTotalDataItem *first = source.firstObject;
-            local = first.totalReturn;
+            local = first.cumulativeChange; // 使用预先计算好的累计涨幅
         }
         if (source.count > 1) {
-            FMGrandTotalDataItem *first = source[1];
-            same = first.totalReturn;
+            FMGrandTotalDataItem *second = source[1];
+            same = second.cumulativeChange; // 使用预先计算好的累计涨幅
         }
         if (source.count > 2) {
-            FMGrandTotalDataItem *first = source.lastObject;
-            hs300 = first.totalReturn;
+            FMGrandTotalDataItem *third = source.lastObject;
+            hs300 = third.cumulativeChange; // 使用预先计算好的累计涨幅
         }
-        
-        // 更新日期
-        self.publicDateLabel.text = [NSString stringWithFormat:@"本基金:%.2f",local.doubleValue];
-        // 更新单位净值
-        self.publicNetWorthLabel.text = [NSString stringWithFormat:@"同类平均:%.2f", same.doubleValue];
-        // 更新日涨幅
-        self.publicDayRateLabel.text = [NSString stringWithFormat:@"沪深300:%.2f", hs300.doubleValue];
-        
+
+        // 更新日期 - 显示本基金百分比
+        self.publicDateLabel.text = [NSString stringWithFormat:@"本基金:%.2f%%", local.doubleValue];
+        // 更新单位净值 - 显示同类平均百分比
+        self.publicNetWorthLabel.text = [NSString stringWithFormat:@"同类平均:%.2f%%", same.doubleValue];
+        // 更新日涨幅 - 显示沪深300百分比
+        self.publicDayRateLabel.text = [NSString stringWithFormat:@"沪深300:%.2f%%", hs300.doubleValue];
+
         // 根据涨跌设置颜色
         [self updateLabelColorWithValue:local.doubleValue label:self.publicDateLabel];
         [self updateLabelColorWithValue:same.doubleValue label:self.publicNetWorthLabel];
