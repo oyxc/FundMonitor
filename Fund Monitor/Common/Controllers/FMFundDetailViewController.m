@@ -342,6 +342,7 @@ typedef NS_ENUM(NSInteger, FMDetailTabType) {
     self.headerView.fundType = self.fund.fundType;
     self.headerView.todayRate = self.fund.estimateRate;
     self.headerView.yearRate = self.detailModel.yearRate;
+    self.headerView.rateRank = self.detailModel.rateRank;
     [self.headerView updateDisplay];
 
     // 更新公共信息标签（显示最新数据）

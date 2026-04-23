@@ -838,6 +838,15 @@
     
     // 解析十大重仓股票代码 stockCodesNew (是数组格式) 数组格式: ["1.688213","1.688484",...]
     fund.stockCodesNew = [self extractJSONArray:@"stockCodesNew" fromString:jsString];
+    
+    // 解析 Data_rateInSimilarType
+    NSArray *rateList = [self extractJSONArray:@"Data_rateInSimilarType" fromString:jsString];
+    if (rateList.count) {
+        NSDictionary *rateDic = rateList.firstObject;
+        if ([rateDic isKindOfClass:NSDictionary.class]) {
+            fund.rateRank = rateDic[@"sc"];
+        }
+    }
 
     // 提取收益率数据
     NSString *syl_1n = [self extractJSVariable:@"syl_1n" fromString:jsString];

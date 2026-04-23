@@ -19,6 +19,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy) NSString *fundCode;        // 基金代码
 @property (nonatomic, copy) NSString *fundName;        // 基金名称
 @property (nonatomic, copy) NSString *updateTime;      // 更新时间
+@property (nonatomic, copy) NSString *rateRank;        // 基金排名
 
 // 收益率数据
 @property (nonatomic, strong) NSNumber *yearRate;      // 近1年收益率（百分比）

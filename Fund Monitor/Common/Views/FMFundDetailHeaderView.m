@@ -11,6 +11,7 @@
 
 @property (nonatomic, strong) UILabel *fundNameLabel;
 @property (nonatomic, strong) UILabel *fundCodeLabel;
+@property (nonatomic, strong) UILabel *rateRankLabel;
 @property (nonatomic, strong) UILabel *todayRateTitleLabel;
 @property (nonatomic, strong) UILabel *todayRateValueLabel;
 @property (nonatomic, strong) UILabel *yearRateTitleLabel;
@@ -51,6 +52,15 @@
     self.fundCodeLabel.textColor = [UIColor secondaryLabelColor];
     self.fundCodeLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [self addSubview:self.fundCodeLabel];
+
+    // 同类排名 - 代码右侧
+    self.rateRankLabel = [[UILabel alloc] init];
+    self.rateRankLabel.text = @"--";
+    self.rateRankLabel.font = [UIFont systemFontOfSize:14];
+    self.rateRankLabel.textColor = [UIColor secondaryLabelColor];
+    self.rateRankLabel.textAlignment = NSTextAlignmentRight;
+    self.rateRankLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    [self addSubview:self.rateRankLabel];
 
     // 当日涨幅 - 左侧
     self.todayRateTitleLabel = [[UILabel alloc] init];
@@ -93,7 +103,7 @@
 
     self.holderRankValueLabel = [[UILabel alloc] init];
     self.holderRankValueLabel.text = @"--";
-    self.holderRankValueLabel.font = [UIFont boldSystemFontOfSize:18];
+    self.holderRankValueLabel.font = [UIFont boldSystemFontOfSize:16];
     self.holderRankValueLabel.textAlignment = NSTextAlignmentRight;
     self.holderRankValueLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [self addSubview:self.holderRankValueLabel];
@@ -108,7 +118,11 @@
         // 基金代码
         [self.fundCodeLabel.topAnchor constraintEqualToAnchor:self.fundNameLabel.bottomAnchor constant:5],
         [self.fundCodeLabel.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:20],
-        [self.fundCodeLabel.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-20],
+
+        // 同类排名
+        [self.rateRankLabel.topAnchor constraintEqualToAnchor:self.fundNameLabel.bottomAnchor constant:5],
+        [self.rateRankLabel.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-20],
+        [self.rateRankLabel.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.fundCodeLabel.trailingAnchor constant:10],
 
         // 当日涨幅标题
         [self.todayRateTitleLabel.topAnchor constraintEqualToAnchor:self.fundCodeLabel.bottomAnchor constant:15],
@@ -137,7 +151,7 @@
         // 基金类型数值
         [self.holderRankValueLabel.topAnchor constraintEqualToAnchor:self.holderRankTitleLabel.bottomAnchor constant:8],
         [self.holderRankValueLabel.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-20],
-        [self.holderRankValueLabel.bottomAnchor constraintEqualToAnchor:self.bottomAnchor constant:-10],
+        [self.holderRankValueLabel.bottomAnchor constraintEqualToAnchor:self.bottomAnchor constant:-15],
         [self.holderRankValueLabel.heightAnchor constraintEqualToConstant:22],
     ]];
 }
@@ -200,6 +214,13 @@
     } else {
         self.holderRankValueLabel.text = @"--";
         self.holderRankValueLabel.textColor = [UIColor labelColor];
+    }
+
+    // 更新同类排名
+    if (self.rateRank && self.rateRank.length > 0) {
+        self.rateRankLabel.text = [NSString stringWithFormat:@"同类排名: %@", self.rateRank];
+    } else {
+        self.rateRankLabel.text = @"--";
     }
 }
 

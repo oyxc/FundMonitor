@@ -26,6 +26,9 @@ NS_ASSUME_NONNULL_BEGIN
 // 近1年收益率（百分比）
 @property (nonatomic, strong) NSNumber *yearRate;
 
+// 同类排名
+@property (nonatomic, copy) NSString *rateRank;
+
 // 更新显示
 - (void)updateDisplay;
 
