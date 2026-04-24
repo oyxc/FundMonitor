@@ -166,7 +166,7 @@
 }
 
 // 使用净值走势数据更新图表
-- (void)updateChartWithNetWorthTrendData {
+- (void)updateChartWithNetWorthTrendData:(NSInteger)startTime {
     if (!self.netWorthTrendData || self.netWorthTrendData.count == 0) {
         self.chartView.data = nil;
         [self.chartView notifyDataSetChanged];
@@ -175,7 +175,7 @@
     }
 
     // 数据优化：过滤掉日期小于最后一天日期的前置数据
-    NSArray *filteredData = [self filterDataByLastDayOfMonth:self.netWorthTrendData];
+    NSArray *filteredData = [self filterDataByLastDayOfMonth:self.netWorthTrendData startTime:startTime];
     if (filteredData.count == 0) {
         self.chartView.data = nil;
         [self.chartView notifyDataSetChanged];
@@ -356,7 +356,7 @@
 }
 
 // 使用累计收益数据更新图表（支持多条线对比）
-- (void)updateChartWithGrandTotalDataByCount:(NSInteger)showCount {
+- (void)updateChartWithGrandTotalDataByCount:(NSInteger)showCount startTime:(NSInteger)startTime {
     if (!self.grandTotalData || self.grandTotalData.count == 0) {
         self.chartView.data = nil;
         [self.chartView notifyDataSetChanged];
@@ -395,7 +395,7 @@
         NSArray *netData = [grandTotal.data subarrayWithRange:NSMakeRange(totalCount - dataCount, dataCount)];
 
         // 数据优化：过滤掉日期小于最后一天日期的前置数据
-        netData = [self filterDataByLastDayOfMonth:netData];
+        netData = [self filterDataByLastDayOfMonth:netData startTime:startTime];
         if (netData.count == 0) {
             continue;
         }
@@ -640,51 +640,20 @@
 #pragma mark - Data Filter
 
 // 过滤数据：剔除日期小于最后一天日期的前置数据
-- (NSArray *)filterDataByLastDayOfMonth:(NSArray *)dataArray {
-    if (!dataArray || dataArray.count == 0) {
+- (NSArray *)filterDataByLastDayOfMonth:(NSArray *)dataArray startTime:(NSInteger)startTime {
+    if (!dataArray || dataArray.count == 0 || startTime == 0) {
         return dataArray;
     }
-
-    // 获取最后一条数据的日期（天数）
-    id lastData = dataArray.lastObject;
-    NSInteger lastDayOfMonth = 0;
-
-    if ([lastData isKindOfClass:[FMNetWorthTrendData class]]) {
-        FMNetWorthTrendData *data = (FMNetWorthTrendData *)lastData;
-        lastDayOfMonth = [self getDayOfMonthFromDateString:data.dateString];
-    } else if ([lastData isKindOfClass:[FMGrandTotalDataItem class]]) {
-        FMGrandTotalDataItem *item = (FMGrandTotalDataItem *)lastData;
-        lastDayOfMonth = [self getDayOfMonthFromDateString:item.dateString];
-    }
-
-    if (lastDayOfMonth == 0) {
-        return dataArray;
-    }
-
-    // 从第一个开始遍历，找到第一个日期大于等于最后一天日期的位置
+    
     NSInteger startIndex = 0;
-    for (NSInteger i = 0; i < dataArray.count; i++) {
-        id data = dataArray[i];
-        NSInteger currentDay = 0;
-
-        if ([data isKindOfClass:[FMNetWorthTrendData class]]) {
-            FMNetWorthTrendData *netData = (FMNetWorthTrendData *)data;
-            currentDay = [self getDayOfMonthFromDateString:netData.dateString];
-        } else if ([data isKindOfClass:[FMGrandTotalDataItem class]]) {
-            FMGrandTotalDataItem *item = (FMGrandTotalDataItem *)data;
-            currentDay = [self getDayOfMonthFromDateString:item.dateString];
-        }
-
-        if (currentDay >= lastDayOfMonth) {
-            startIndex = i;
+    for (FMNetWorthTrendData *netModel in dataArray) {
+        if (netModel.dateStringInt >= startTime) {
+            startIndex = [dataArray indexOfObject:netModel];
             break;
         }
     }
-
-    // 返回过滤后的数据
-    if (startIndex > 0 && startIndex < dataArray.count) {
-        return [dataArray subarrayWithRange:NSMakeRange(startIndex, dataArray.count - startIndex)];
-    }
+    
+    dataArray = [dataArray subarrayWithRange:NSMakeRange(startIndex, dataArray.count - startIndex)];
 
     return dataArray;
 }

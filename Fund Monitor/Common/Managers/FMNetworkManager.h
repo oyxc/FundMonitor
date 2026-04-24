@@ -59,6 +59,14 @@ typedef void(^FMNetworkFailureBlock)(NSError *error);
                     success:(FMNetworkSuccessBlock)success
                     failure:(FMNetworkFailureBlock)failure;
 
+// 获取累计收益率走势数据（支持完整时间段）
+// type: m=1月, q=3月, hy=6月, y=1年, try=3年, fiy=5年, sy=今年, se=成立来
+- (void)fetchGrandTotalData:(NSString *)fundCode
+                 indexCode:(NSString *)indexCode
+                      type:(NSString *)type
+                   success:(FMNetworkSuccessBlock)success
+                   failure:(FMNetworkFailureBlock)failure;
+
 @end
 
 NS_ASSUME_NONNULL_END

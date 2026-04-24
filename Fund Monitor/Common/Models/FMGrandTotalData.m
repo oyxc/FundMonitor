@@ -28,6 +28,14 @@
     return _dateString;
 }
 
+- (NSInteger)dateStringInt
+{
+    if (_dateStringInt == 0) {
+        _dateStringInt = [self.dateString stringByReplacingOccurrencesOfString:@"-" withString:@""].integerValue;
+    }
+    return _dateStringInt;
+}
+
 #pragma mark - NSCoding
 
 - (void)encodeWithCoder:(NSCoder *)coder {

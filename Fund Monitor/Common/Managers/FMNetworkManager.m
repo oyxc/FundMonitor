@@ -998,6 +998,72 @@
     } failure:failure];
 }
 
+// 获取累计收益率走势数据
+- (void)fetchGrandTotalData:(NSString *)fundCode
+                 indexCode:(NSString *)indexCode
+                      type:(NSString *)type
+                   success:(FMNetworkSuccessBlock)success
+                   failure:(FMNetworkFailureBlock)failure {
+    NSString *urlString = [NSString stringWithFormat:
+        @"http://api.fund.eastmoney.com/pinzhong/LJSYLZS?fundCode=%@&indexcode=%@&type=%@&callback=callback",
+        fundCode, indexCode, type];
+
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:urlString]];
+    [request setValue:@"http://fund.eastmoney.com" forHTTPHeaderField:@"Referer"];
+    [request setValue:@"Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15" forHTTPHeaderField:@"User-Agent"];
+
+    NSURLSession *session = [NSURLSession sharedSession];
+    [[session dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        if (error) {
+            if (failure) failure(error);
+            return;
+        }
+
+        NSString *rawString = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+
+        // 去掉 JSONP 包装 callback(...)
+        NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"callback\\((.*)\\)" options:NSRegularExpressionDotMatchesLineSeparators error:nil];
+        NSTextCheckingResult *match = [regex firstMatchInString:rawString options:0 range:NSMakeRange(0, rawString.length)];
+
+        if (!match) {
+            if (failure) failure([NSError errorWithDomain:@"FMNetwork" code:-1 userInfo:@{NSLocalizedDescriptionKey: @"解析失败"}]);
+            return;
+        }
+
+        NSString *jsonString = [rawString substringWithRange:[match rangeAtIndex:1]];
+        NSData *jsonData = [jsonString dataUsingEncoding:NSUTF8StringEncoding];
+        NSError *jsonError = nil;
+        NSDictionary *jsonDict = [NSJSONSerialization JSONObjectWithData:jsonData options:0 error:&jsonError];
+
+        if (jsonError || !jsonDict) {
+            if (failure) failure(jsonError);
+            return;
+        }
+
+        // 解析 Data 数组
+        NSArray *dataArray = jsonDict[@"Data"];
+        NSMutableArray<FMGrandTotalData *> *result = [NSMutableArray array];
+
+        for (NSDictionary *item in dataArray) {
+            NSString *name = item[@"name"];
+            NSArray *points = item[@"data"];
+            NSMutableArray<FMGrandTotalDataItem *> *items = [NSMutableArray array];
+
+            for (NSArray *point in points) {
+                if (point.count >= 2) {
+                    NSNumber *timestamp = point[0];
+                    NSNumber *totalReturn = [point[1] isKindOfClass:[NSNull class]] ? @(0) : point[1];
+                    [items addObject:[FMGrandTotalDataItem itemWithTimestamp:timestamp totalReturn:totalReturn]];
+                }
+            }
+
+            [result addObject:[FMGrandTotalData dataWithName:name items:items]];
+        }
+
+        if (success) success(result);
+    }] resume];
+}
+
 // 解析热门基金排行数据
 - (NSArray *)parseHotFundRankingData:(NSString *)jsonString {
     if (!jsonString || jsonString.length == 0) {

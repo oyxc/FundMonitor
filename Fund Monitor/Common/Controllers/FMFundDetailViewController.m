@@ -52,6 +52,7 @@ typedef NS_ENUM(NSInteger, FMDetailTabType) {
 @property (nonatomic, strong) FMFundChartView *chartView;
 @property (nonatomic, strong) UISegmentedControl *periodSegmentControl;  // 时间段选择
 @property (nonatomic, assign) NSInteger currentPeriodPageSize;  // 当前时间段对应的数据量
+@property (nonatomic, assign) NSInteger startTime; //开始时间 int
 
 @property (nonatomic, strong) FMFundDetailModel *detailModel;
 
@@ -318,17 +319,35 @@ typedef NS_ENUM(NSInteger, FMDetailTabType) {
 
     // 显示当前数据
     [self updateUI];
-    
+
     // 加载十大重仓数据
     self.holdingsView.fundCode = self.fund.fundCode;
     [self.holdingsView loadHoldingsData];
-    
+
     // 获取最新估值数据
     [[FMNetworkManager sharedManager] fetchFundDetail:self.fund.fundCode success:^(id responseObject) {
         if ([responseObject isKindOfClass:[FMFundDetailModel class]]) {
             FMFundDetailModel *updatedFund = responseObject;
             self.detailModel = updatedFund;
-            [self updateUI];
+            // 初始化默认时间段（近6月）
+            [self getTimeWithMonthCount:6];
+
+            // 获取3年累计收益数据（替换原有的122天数据）
+            [[FMNetworkManager sharedManager] fetchGrandTotalData:self.fund.fundCode
+                                                       indexCode:@"000300"
+                                                            type:@"try"
+                                                         success:^(id grandTotalResponse) {
+                NSArray<FMGrandTotalData *> *grandTotalData = grandTotalResponse;
+                self.detailModel.grandTotalData = grandTotalData;
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [self updateUI];
+                });
+            } failure:^(NSError *error) {
+                NSLog(@"获取3年累计收益数据失败: %@", error);
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [self updateUI];
+                });
+            }];
         }
     } failure:^(NSError *error) {
         NSLog(@"加载基金详情失败: %@", error);
@@ -464,28 +483,74 @@ typedef NS_ENUM(NSInteger, FMDetailTabType) {
 - (void)periodChanged:(UISegmentedControl *)segment {
     // 根据选中的时间段确定数据量
     NSInteger pageSize = 30;  // 默认近1月
+    NSInteger monthCount = 6;  // 默认近6月
     switch (segment.selectedSegmentIndex) {
         case 0:  // 近1月
-            pageSize = 30;
+            pageSize = 30*1;
+            monthCount = 1;
             break;
         case 1:  // 近3月
-            pageSize = 90;
+            pageSize = 30*3;
+            monthCount = 3;
             break;
         case 2:  // 近6月
-            pageSize = 180;
+            pageSize = 30*6;
+            monthCount = 6;
             break;
         case 3:  // 近1年
-            pageSize = 365;
+            pageSize = 30*12*1;
+            monthCount = 12*1;
             break;
         case 4:  // 近3年
-            pageSize = 1095;
+            pageSize = 30*12*3;
+            monthCount = 12*3;
             break;
     }
 
     self.currentPeriodPageSize = pageSize;
+    [self getTimeWithMonthCount:monthCount];
 
     // 根据当前选中的标签页更新对应的图表和数据
     [self switchToTab:self.segmentControl.selectedSegmentIndex];
+}
+
+- (void)getTimeWithMonthCount:(NSInteger)monthCount
+{
+    FMNetWorthTrendData *lastObject = self.detailModel.netWorthTrendData.lastObject;
+    if (lastObject == nil) {
+        return;
+    }
+    NSString *currentTime = lastObject.dateString;
+    
+    if (currentTime.length < 10) {
+        NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
+        formatter.dateFormat = @"yyyy-MM-dd";
+        currentTime = [formatter stringFromDate:NSDate.date];
+    }
+    
+    NSArray<NSString *> *separatedTime = [currentTime componentsSeparatedByString:@"-"];
+    if (separatedTime.count < 3) {
+        return;
+    }
+    NSInteger year = separatedTime.firstObject.integerValue;
+    NSInteger month = separatedTime[1].integerValue;
+    NSInteger day = separatedTime.lastObject.integerValue;
+    
+    NSDateComponents *components = [[NSDateComponents alloc] init];
+    components.year = year;
+    components.month = month - monthCount;
+    components.day = day;
+    
+    NSCalendar *calendar = [NSCalendar currentCalendar];
+    NSDate *date = [calendar dateFromComponents:components];
+    
+    NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
+    formatter.dateFormat = @"yyyy-MM-dd";
+    NSString *resultTime = [formatter stringFromDate:date];
+    NSLog(@"%@", resultTime);
+    // 输出: "2025-10-23"
+    // (2026年1月 往前推3个月 = 2025年10月)
+    self.startTime = [resultTime stringByReplacingOccurrencesOfString:@"-" withString:@""].integerValue;
 }
 
 - (void)segmentChanged:(UISegmentedControl *)segment {
@@ -522,8 +587,9 @@ typedef NS_ENUM(NSInteger, FMDetailTabType) {
         if (self.currentPeriodPageSize <= count) {
             netData = [self.detailModel.netWorthTrendData subarrayWithRange:NSMakeRange(count - self.currentPeriodPageSize, self.currentPeriodPageSize)];
         }
+        
         self.chartView.netWorthTrendData = netData;
-        [self.chartView updateChartWithNetWorthTrendData];
+        [self.chartView updateChartWithNetWorthTrendData:self.startTime];
     }
 }
 
@@ -532,7 +598,7 @@ typedef NS_ENUM(NSInteger, FMDetailTabType) {
     if (self.detailModel.grandTotalData && self.detailModel.grandTotalData.count > 0) {
         // 使用 grandTotalData 显示累计收益图表
         self.chartView.grandTotalData = self.detailModel.grandTotalData;
-        [self.chartView updateChartWithGrandTotalDataByCount:self.currentPeriodPageSize];
+        [self.chartView updateChartWithGrandTotalDataByCount:self.currentPeriodPageSize startTime:self.startTime];
     }
 }
 

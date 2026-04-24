@@ -24,10 +24,10 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong) NSArray<FMGrandTotalData *> *grandTotalData;
 
 // 使用净值走势数据更新图表
-- (void)updateChartWithNetWorthTrendData;
+- (void)updateChartWithNetWorthTrendData:(NSInteger)startTime;
 
 // 使用累计收益数据更新图表
-- (void)updateChartWithGrandTotalDataByCount:(NSInteger)showCount;
+- (void)updateChartWithGrandTotalDataByCount:(NSInteger)showCount startTime:(NSInteger)startTime;
 
 @end
 
