@@ -157,18 +157,17 @@
     if (!self.isViewVisible) {
         return;
     }
-    
-    // 更新日志文本，但保留搜索高亮
+
+    // 搜索模式下不更新日志，避免打断搜索高亮
+    if (self.searchRanges.count > 0) {
+        return;
+    }
+
     if (self.logTextView.contentSize.height <= (self.logTextView.contentOffset.y + CGRectGetHeight(self.bounds))) {
         self.logTextView.text = logText;
         [self.logTextView scrollRangeToVisible:NSMakeRange(self.logTextView.text.length, 1)];
-    }else {
+    } else {
         self.logTextView.text = logText;
-    }
-    
-    // 如果之前有搜索结果，重新高亮
-    if (self.searchRanges.count > 0) {
-        [self highlightCurrentResult];
     }
 }
 
@@ -264,93 +263,112 @@
     [self.searchRanges removeAllObjects];
     self.currentHighlightIndex = 0;
     self.lastSearchText = searchText;
-    
-    // 查找所有匹配的范围
+
     NSString *text = self.logTextView.text;
-    
-    // 检查文本是否为空
     if (text.length == 0) {
         self.searchCountLabel.text = @"0/0";
         return;
     }
-    
-    NSRange searchRange = NSMakeRange(0, text.length);
-    NSRange foundRange;
-    
-    while (searchRange.location < text.length) {
-        foundRange = [text rangeOfString:searchText options:NSCaseInsensitiveSearch range:searchRange];
-        if (foundRange.location != NSNotFound) {
-            [self.searchRanges addObject:[NSValue valueWithRange:foundRange]];
-            searchRange = NSMakeRange(NSMaxRange(foundRange), text.length - NSMaxRange(foundRange));
-        } else {
-            break;
+
+    // 在后台线程查找所有匹配范围，避免阻塞主线程
+    NSString *searchTextCopy = [searchText copy];
+    NSString *textCopy = [text copy];
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        NSMutableArray *ranges = [NSMutableArray array];
+        NSRange searchRange = NSMakeRange(0, textCopy.length);
+        while (searchRange.location < textCopy.length) {
+            NSRange found = [textCopy rangeOfString:searchTextCopy options:NSCaseInsensitiveSearch range:searchRange];
+            if (found.location == NSNotFound) break;
+            [ranges addObject:[NSValue valueWithRange:found]];
+            searchRange = NSMakeRange(NSMaxRange(found), textCopy.length - NSMaxRange(found));
         }
-    }
-    
-    // 更新计数标签和高亮
-    if (self.searchRanges.count > 0) {
-        self.searchCountLabel.text = [NSString stringWithFormat:@"1/%ld", (long)self.searchRanges.count];
-        [self highlightCurrentResult];
-    } else {
-        self.searchCountLabel.text = @"0/0";
-        [self clearSearchHighlight];
-    }
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            // 确保搜索词没有在后台执行期间被更改
+            if (![self.lastSearchText isEqualToString:searchTextCopy]) return;
+
+            self.searchRanges = ranges;
+            self.currentHighlightIndex = 0;
+
+            if (ranges.count > 0) {
+                self.searchCountLabel.text = [NSString stringWithFormat:@"1/%ld", (long)ranges.count];
+                [self highlightCurrentResultScrolling:YES];
+            } else {
+                self.searchCountLabel.text = @"0/0";
+                [self clearSearchHighlight];
+            }
+        });
+    });
 }
 
 - (void)highlightCurrentResult {
+    [self highlightCurrentResultScrolling:NO];
+}
+
+- (void)highlightCurrentResultScrolling:(BOOL)scrolling {
     if (self.searchRanges.count == 0) return;
-    
-    // 获取原始的文本（不是 attributedText）
+
     NSString *originalText = self.logTextView.text;
-    
-    // 如果 logTextView 已经有 attributedText，保持它的基础样式
-    NSMutableAttributedString *attributedString;
-    if (self.logTextView.attributedText && self.logTextView.attributedText.length > 0) {
-        attributedString = [[NSMutableAttributedString alloc] initWithAttributedString:self.logTextView.attributedText];
-    } else {
-        attributedString = [[NSMutableAttributedString alloc] initWithString:originalText];
+    NSUInteger textLen = originalText.length;
+
+    // 保存当前选中范围，赋值 attributedText 会重置 selectedRange
+    NSRange savedSelection = self.logTextView.selectedRange;
+
+    // 基础样式
+    NSMutableAttributedString *attributedString = [[NSMutableAttributedString alloc] initWithString:originalText];
+    [attributedString addAttribute:NSForegroundColorAttributeName value:[UIColor whiteColor] range:NSMakeRange(0, textLen)];
+    [attributedString addAttribute:NSFontAttributeName value:[UIFont systemFontOfSize:14.0] range:NSMakeRange(0, textLen)];
+
+    // 只高亮当前项前后各 50 个匹配，避免全量遍历导致卡顿
+    NSInteger total = (NSInteger)self.searchRanges.count;
+    NSInteger start = MAX(0, self.currentHighlightIndex - 50);
+    NSInteger end   = MIN(total - 1, self.currentHighlightIndex + 50);
+
+    UIColor *normalHighlight  = [UIColor colorWithRed:1.0 green:200/255.0 blue:0 alpha:0.4];
+    UIColor *currentHighlight = [UIColor colorWithRed:1.0 green:200/255.0 blue:0 alpha:0.9];
+
+    for (NSInteger i = start; i <= end; i++) {
+        NSRange range = [self.searchRanges[i] rangeValue];
+        UIColor *color = (i == self.currentHighlightIndex) ? currentHighlight : normalHighlight;
+        [attributedString addAttribute:NSBackgroundColorAttributeName value:color range:range];
     }
-    
-    // 为所有匹配的范围添加浅色背景
-    for (NSValue *rangeValue in self.searchRanges) {
-        NSRange range = rangeValue.rangeValue;
-        [attributedString addAttribute:NSBackgroundColorAttributeName value:[UIColor colorWithRed:255/255.0 green:200/255.0 blue:0/255.0 alpha:0.4] range:range];
-    }
-    
-    // 为当前的高亮添加深色背景
-    NSValue *currentRangeValue = self.searchRanges[self.currentHighlightIndex];
-    NSRange currentRange = currentRangeValue.rangeValue;
-    [attributedString addAttribute:NSBackgroundColorAttributeName value:[UIColor colorWithRed:255/255.0 green:200/255.0 blue:0/255.0 alpha:0.9] range:currentRange];
-    
+
     self.logTextView.attributedText = attributedString;
-    
-    // 滚动到当前结果
-    [self.logTextView scrollRangeToVisible:currentRange];
-    
-    // 更新计数标签
-    self.searchCountLabel.text = [NSString stringWithFormat:@"%ld/%ld", (long)(self.currentHighlightIndex + 1), (long)self.searchRanges.count];
+
+    // 恢复选中范围
+    if (savedSelection.location != NSNotFound && NSMaxRange(savedSelection) <= textLen) {
+        self.logTextView.selectedRange = savedSelection;
+    }
+
+    // 只在明确要求时才滚动
+    if (scrolling) {
+        NSRange currentRange = [self.searchRanges[self.currentHighlightIndex] rangeValue];
+        [self.logTextView scrollRangeToVisible:currentRange];
+    }
+
+    self.searchCountLabel.text = [NSString stringWithFormat:@"%ld/%ld", (long)(self.currentHighlightIndex + 1), (long)total];
 }
 
 - (void)previousHighlightClick {
     if (self.searchRanges.count == 0) return;
-    
+
     self.currentHighlightIndex--;
     if (self.currentHighlightIndex < 0) {
         self.currentHighlightIndex = self.searchRanges.count - 1;
     }
-    
-    [self highlightCurrentResult];
+
+    [self highlightCurrentResultScrolling:YES];
 }
 
 - (void)nextHighlightClick {
     if (self.searchRanges.count == 0) return;
-    
+
     self.currentHighlightIndex++;
     if (self.currentHighlightIndex >= self.searchRanges.count) {
         self.currentHighlightIndex = 0;
     }
-    
-    [self highlightCurrentResult];
+
+    [self highlightCurrentResultScrolling:YES];
 }
 
 - (void)clearSearchHighlight {
