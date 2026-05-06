@@ -82,6 +82,11 @@
         // 解析响应数据
         NSString *responseString = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
         NSLog(@"✅ 原始响应 %@: %@", fundCode, responseString);
+        if (responseString.length > 300) {
+            NSLog(@"✅ 原始响应（前300字符）: %@...", [responseString substringToIndex:300]);
+        } else {
+            NSLog(@"✅ 原始响应: %@", responseString);
+        }
         
         if (!responseString) {
             NSLog(@"❌ 无数据");
@@ -396,40 +401,39 @@
         return;
     }
 
-    // 使用基金速查网实时估值API
-    NSString *urlString = [NSString stringWithFormat:@"https://m.dayfund.cn/ajs/ajaxdata.shtml?showtype=getfundvalue&fundcode=%@", fundCode];
-    //urlString = @"https://m.dayfund.cn/ajs/ajaxdata.shtml?showtype=getfundvalue&fundcode=008164";
+    // 使用天天基金历史净值API获取昨日净值和涨跌幅
+    NSString *urlString = [NSString stringWithFormat:@"https://fundf10.eastmoney.com/F10DataApi.aspx?type=lsjz&code=%@&per=1", fundCode];
 
-//    __weak typeof(self) weakSelf = self;
     [self requestWithUrl:urlString fundCode:fundCode success:^(NSString *jsonString) {
-        // 解析基金数据
         // 返回格式示例：
-        // 2026-02-09|1.0611|1.7111|0.0064|0.61%|0.00%|0.0000|1.0611|1.0547|2026-02-10|11:30:00
-        
-        NSArray<NSString *> *fields = [jsonString componentsSeparatedByString:@"|"];
-        
+        // var apidata={ content:"<table>...<td>2026-04-30</td><td class='tor bold'>2.0823</td><td class='tor bold'>2.0823</td><td class='tor bold red'>0.90%</td>...</table>",records:520,pages:520,curpage:1};
+
         FMNetWorthModel *netModel = [[FMNetWorthModel alloc] init];
         netModel.fundCode = fundCode;
-        if (fields.count >= 11) {
-            netModel.netValueDate = fields[0];        // 净值日期
-            netModel.unitNetValue = fields[1];        // 单位净值
-            //netModel.accumulatedNetValue = fields[2]; // 累计净值
-            //netModel.netValueGrowth = fields[3];      // 净值增长
-            netModel.growthRate = fields[4];          // 净值增长率
-            netModel.estimateGrowthRate = fields[5];  // 估算增长率
-            //netModel.estimateGrowth = fields[6];      // 估算增长额
-            netModel.estimateNetValue = fields[7];    // 估算净值
-            //netModel.previousNetValue = fields[8];    // 前一日净值
-            netModel.estimateDate = fields[9];        // 估值日期
-            netModel.estimateTime = fields[10];       // 估值时间
+
+        // 用正则从 HTML 表格中提取 <td> 内容
+        NSError *regexError = nil;
+        NSRegularExpression *tdRegex = [NSRegularExpression regularExpressionWithPattern:@"<td[^>]*>([^<]*)</td>" options:0 error:&regexError];
+        NSArray<NSTextCheckingResult *> *matches = [tdRegex matchesInString:jsonString options:0 range:NSMakeRange(0, jsonString.length)];
+
+        // tbody 中第一行共 7 列：净值日期、单位净值、累计净值、日增长率、申购状态、赎回状态、分红送配
+        // thead 有 7 个 <th>，tbody 第一行从 index 7 开始
+        if (matches.count >= 14) {
+            NSString *date       = [jsonString substringWithRange:[matches[7] rangeAtIndex:1]];   // 净值日期
+            NSString *unitNet    = [jsonString substringWithRange:[matches[8] rangeAtIndex:1]];   // 单位净值
+            NSString *growthRate = [jsonString substringWithRange:[matches[10] rangeAtIndex:1]];  // 日增长率
+
+            netModel.netValueDate  = [date stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            netModel.unitNetValue  = [unitNet stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            netModel.growthRate    = [growthRate stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
         }
-        
+
         dispatch_async(dispatch_get_main_queue(), ^{
             if (success) {
                 success(netModel);
             }
         });
-        
+
     } failure:^(NSError * _Nonnull error) {
         dispatch_async(dispatch_get_main_queue(), ^{
             if (failure) {
@@ -506,8 +510,8 @@
 
         // 打印原始响应（前500个字符）
         NSString *rawResponse = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-        if (rawResponse.length > 500) {
-            NSLog(@"✅ [历史数据] 原始响应（前500字符）: %@...", [rawResponse substringToIndex:500]);
+        if (rawResponse.length > 300) {
+            NSLog(@"✅ [历史数据] 原始响应（前300字符）: %@...", [rawResponse substringToIndex:300]);
         } else {
             NSLog(@"✅ [历史数据] 原始响应: %@", rawResponse);
         }
@@ -569,8 +573,8 @@
         NSString *jsonString = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
         jsonString = [jsonString stringByReplacingOccurrencesOfString:@"var r = " withString:@""];
         jsonString = [jsonString stringByReplacingOccurrencesOfString:@";" withString:@""];
-        if (jsonString.length > 500) {
-            NSLog(@"✅ [全量基金] 原始响应（前500字符）: %@...", [jsonString substringToIndex:500]);
+        if (jsonString.length > 300) {
+            NSLog(@"✅ [全量基金] 原始响应（前300字符）: %@...", [jsonString substringToIndex:300]);
         } else {
             NSLog(@"✅ [全量基金] 原始响应: %@", jsonString);
         }
