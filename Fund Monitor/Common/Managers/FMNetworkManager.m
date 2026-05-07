@@ -59,7 +59,7 @@
         NSLog(@"📡 请求URL: %@", urlString);
         
         if (error) {
-            NSLog(@"❌ 网络请求失败: %@", error.localizedDescription);
+            NSLog(@"❌ 网络请求失败URL: %@ \n%@", urlString, error.localizedDescription);
             dispatch_async(dispatch_get_main_queue(), ^{
                 if (failure) {
                     failure(error);
@@ -82,8 +82,8 @@
         // 解析响应数据
         NSString *responseString = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
         NSLog(@"✅ 原始响应 %@: %@", fundCode, responseString);
-        if (responseString.length > 300) {
-            NSLog(@"✅ 原始响应（前300字符）: %@...", [responseString substringToIndex:300]);
+        if (responseString.length > 500) {
+            NSLog(@"✅ 原始响应（前500字符）: %@...", [responseString substringToIndex:500]);
         } else {
             NSLog(@"✅ 原始响应: %@", responseString);
         }
@@ -418,10 +418,10 @@
 
         // tbody 中第一行共 7 列：净值日期、单位净值、累计净值、日增长率、申购状态、赎回状态、分红送配
         // thead 有 7 个 <th>，tbody 第一行从 index 7 开始
-        if (matches.count >= 14) {
-            NSString *date       = [jsonString substringWithRange:[matches[7] rangeAtIndex:1]];   // 净值日期
-            NSString *unitNet    = [jsonString substringWithRange:[matches[8] rangeAtIndex:1]];   // 单位净值
-            NSString *growthRate = [jsonString substringWithRange:[matches[10] rangeAtIndex:1]];  // 日增长率
+        if (matches.count >= 3) {
+            NSString *date       = [jsonString substringWithRange:[matches[0] rangeAtIndex:1]];   // 净值日期
+            NSString *unitNet    = [jsonString substringWithRange:[matches[1] rangeAtIndex:1]];   // 单位净值
+            NSString *growthRate = [jsonString substringWithRange:[matches[3] rangeAtIndex:1]];  // 日增长率
 
             netModel.netValueDate  = [date stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
             netModel.unitNetValue  = [unitNet stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
@@ -487,7 +487,7 @@
 
     NSURLSessionDataTask *task = [self.session dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
         if (error) {
-            NSLog(@"❌ [历史数据] 网络请求失败: %@", error.localizedDescription);
+            NSLog(@"❌ [历史数据] 网络请求失败URL: %@ \n%@", urlString, error.localizedDescription);
             dispatch_async(dispatch_get_main_queue(), ^{
                 if (failure) {
                     failure(error);
@@ -510,18 +510,12 @@
 
         // 打印原始响应（前500个字符）
         NSString *rawResponse = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-        if (rawResponse.length > 300) {
-            NSLog(@"✅ [历史数据] 原始响应（前300字符）: %@...", [rawResponse substringToIndex:300]);
-        } else {
-            NSLog(@"✅ [历史数据] 原始响应: %@", rawResponse);
-        }
 
         // 解析历史净值数据
         NSArray *historyData = [self parseHistoryDataFromJSONP:data];
 
         dispatch_async(dispatch_get_main_queue(), ^{
             if (historyData && historyData.count > 0) {
-                NSLog(@"✅ [历史数据] 解析成功，共 %lu 条数据", (unsigned long)historyData.count);
                 if (success) {
                     success(historyData);
                 }
@@ -549,7 +543,7 @@
     
     NSURLSessionDataTask *task = [self.session dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
         if (error) {
-            NSLog(@"❌ [全量基金]网络请求失败: %@", error.localizedDescription);
+            NSLog(@"❌ [全量基金]网络请求失败URL: %@ \n%@", urlString, error.localizedDescription);
             dispatch_async(dispatch_get_main_queue(), ^{
                 if (failure) {
                     failure(error);
@@ -573,11 +567,6 @@
         NSString *jsonString = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
         jsonString = [jsonString stringByReplacingOccurrencesOfString:@"var r = " withString:@""];
         jsonString = [jsonString stringByReplacingOccurrencesOfString:@";" withString:@""];
-        if (jsonString.length > 300) {
-            NSLog(@"✅ [全量基金] 原始响应（前300字符）: %@...", [jsonString substringToIndex:300]);
-        } else {
-            NSLog(@"✅ [全量基金] 原始响应: %@", jsonString);
-        }
         
         NSData *jsonData = [jsonString dataUsingEncoding:NSUTF8StringEncoding];
         // 解析数据
@@ -597,7 +586,6 @@
         
         dispatch_async(dispatch_get_main_queue(), ^{
             if (allList && allList.count > 0) {
-                NSLog(@"✅ [全量基金] 解析成功，共 %lu 条数据", (unsigned long)allList.count);
                 if (success) {
                     success(allList);
                 }
@@ -628,8 +616,6 @@
         NSLog(@"❌ [解析] 无法转换为字符串");
         return nil;
     }
-
-    NSLog(@"🔍 [解析] 开始解析JSONP数据");
 
     // 移除JSONP包装: jQuery(...);
     NSRange startRange = [jsonpString rangeOfString:@"jQuery("];
@@ -694,8 +680,6 @@
                                                           dayRate:dayRate];
         [historyData addObject:data];
     }
-
-    NSLog(@"✅ [解析] 成功解析 %lu 条历史数据", (unsigned long)historyData.count);
 
     // 反转数组，使最新的数据在最后
     return [[historyData reverseObjectEnumerator] allObjects];
