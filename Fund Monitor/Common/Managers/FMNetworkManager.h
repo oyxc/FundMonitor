@@ -37,12 +37,6 @@ typedef void(^FMNetworkFailureBlock)(NSError *error);
                 success:(FMNetworkSuccessBlock)success
                 failure:(FMNetworkFailureBlock)failure;
 
-// 获取基金历史净值数据
-- (void)fetchFundHistoryData:(NSString *)fundCode
-                    pageSize:(NSInteger)pageSize
-                     success:(FMNetworkSuccessBlock)success
-                     failure:(FMNetworkFailureBlock)failure;
-
 // 获取全量基金
 - (void)fetchAllFundWithSuccess:(FMNetworkSuccessBlock)success
                         failure:(FMNetworkFailureBlock)failure;

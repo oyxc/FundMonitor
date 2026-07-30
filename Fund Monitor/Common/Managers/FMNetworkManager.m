@@ -270,7 +270,7 @@
         dispatch_group_enter(group);
 //        NSLog(@"enter group code:%@",code);
         
-        [self fetchDayFundEstimateValue:code success:^(id responseObject) {
+        [self fetchFundEstimateValue:code success:^(id responseObject) {
             if ([responseObject isKindOfClass:[FMNetWorthModel class]]) {
                 [funds addObject:responseObject];
             }
@@ -290,105 +290,6 @@
     });
 }
 
-// 天天基金-净值估算API
-- (void)fetchDayFundEstimateValue:(NSString *)fundCode
-                          success:(FMNetworkSuccessBlock)success
-                          failure:(FMNetworkFailureBlock)failure {
-    if (!fundCode || fundCode.length == 0) {
-        if (failure) {
-            NSError *error = [NSError errorWithDomain:@"FMNetworkManager" code:-1 userInfo:@{NSLocalizedDescriptionKey: @"基金代码不能为空"}];
-            failure(error);
-        }
-        return;
-    }
-    
-    // 使用天天基金实时估值API
-    NSString *urlString = [NSString stringWithFormat:@"https://fundgz.1234567.com.cn/js/%@.js", fundCode];
-    
-    [self requestWithUrl:urlString fundCode:fundCode success:^(NSString *jsonString) {
-        
-        // 数据解析
-        // 返回格式示例：jsonpgz({"fundcode":"110022","name":"易方达消费行业股票","jzrq":"2026-02-03","dwjz":"3.3830","gsz":"3.4773","gszzl":"2.79","gztime":"2026-02-04 15:00"});
-        
-        // 移除 JSONP 包装
-        jsonString = [jsonString stringByReplacingOccurrencesOfString:@"jsonpgz(" withString:@""];
-        jsonString = [jsonString stringByReplacingOccurrencesOfString:@");" withString:@""];
-        
-        // 解析 JSON 字典
-        NSData *jsonData = [jsonString dataUsingEncoding:NSUTF8StringEncoding];
-        NSError *parseError = nil;
-        NSDictionary *jsonDict = [NSJSONSerialization JSONObjectWithData:jsonData options:0 error:&parseError];
-        
-        __block FMNetWorthModel *netModel = [[FMNetWorthModel alloc] init];
-        
-        BOOL isDataEnabel = NO;
-        if (!parseError && [jsonDict isKindOfClass:[NSDictionary class]]) {
-            isDataEnabel = YES;
-            // 使用字典解析数据
-            netModel.fundCode = jsonDict[@"fundcode"] ?: fundCode;
-            netModel.netValueDate = jsonDict[@"jzrq"];              // 净值日期
-            netModel.unitNetValue = jsonDict[@"dwjz"];              // 单位净值
-            netModel.estimateGrowthRate = [NSString stringWithFormat:@"%@%%", jsonDict[@"gszzl"]]; // 估算增长率
-            netModel.estimateNetValue = jsonDict[@"gsz"];           // 估算净值
-            netModel.estimateDate = jsonDict[@"gztime"];            // 估值时间
-            netModel.estimateTime = jsonDict[@"gztime"];            // 估值时间
-            
-            // 从估值时间中分离日期和时间
-            NSArray *timeComponents = [netModel.estimateTime componentsSeparatedByString:@" "];
-            if (timeComponents.count >= 2) {
-                netModel.estimateDate = timeComponents[0];
-                netModel.estimateTime = timeComponents[1];
-            }
-        }
-        
-        __weak typeof(self) weakSelf = self;
-        
-        // estimateNetValue 没有值，从天天基金-接口获取
-        if (netModel.growthRate.doubleValue == 0) {
-            [weakSelf fetchFundEstimateValue:fundCode success:^(id  _Nonnull responseObject) {
-                FMNetWorthModel *newModel = (FMNetWorthModel *)responseObject;
-                if (isDataEnabel == NO) {
-                    netModel = newModel;
-                } else {
-                    netModel.growthRate = newModel.growthRate;
-                    NSString *net_netValueDate = [netModel.netValueDate stringByReplacingOccurrencesOfString:@"-" withString:@""];
-                    NSString *new_netValueDate = [newModel.netValueDate stringByReplacingOccurrencesOfString:@"-" withString:@""];
-                    if (new_netValueDate.integerValue > net_netValueDate.integerValue) {
-                        netModel.netValueDate = newModel.netValueDate;
-                        netModel.unitNetValue = newModel.unitNetValue;
-                    }
-                }
-
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    if (success) {
-                        success(netModel);
-                    }
-                });
-                
-            } failure:^(NSError * _Nonnull error) {
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    if (failure) {
-                        failure(error);
-                    }
-                });
-            }];
-        } else {
-            dispatch_async(dispatch_get_main_queue(), ^{
-                if (success) {
-                    success(netModel);
-                }
-            });
-        }
-        
-    } failure:^(NSError * _Nonnull error) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            if (failure) {
-                failure(error);
-            }
-        });
-    }];
-}
-
 // 基金速查网-净值估算API
 - (void)fetchFundEstimateValue:(NSString *)fundCode
                        success:(FMNetworkSuccessBlock)success
@@ -400,40 +301,41 @@
         }
         return;
     }
-
-    // 使用天天基金历史净值API获取昨日净值和涨跌幅
-    NSString *urlString = [NSString stringWithFormat:@"https://fundf10.eastmoney.com/F10DataApi.aspx?type=lsjz&code=%@&per=1", fundCode];
-
+    
+    // 使用基金速查网实时估值API
+    NSString *urlString = [NSString stringWithFormat:@"https://m.dayfund.cn/ajs/ajaxdata.shtml?showtype=getfundvalue&fundcode=%@", fundCode];
+    //urlString = @"https://m.dayfund.cn/ajs/ajaxdata.shtml?showtype=getfundvalue&fundcode=008164";
+    
+    //    __weak typeof(self) weakSelf = self;
     [self requestWithUrl:urlString fundCode:fundCode success:^(NSString *jsonString) {
+        // 解析基金数据
         // 返回格式示例：
-        // var apidata={ content:"<table>...<td>2026-04-30</td><td class='tor bold'>2.0823</td><td class='tor bold'>2.0823</td><td class='tor bold red'>0.90%</td>...</table>",records:520,pages:520,curpage:1};
-
+        // 2026-02-09|1.0611|1.7111|0.0064|0.61%|0.00%|0.0000|1.0611|1.0547|2026-02-10|11:30:00
+        
+        NSArray<NSString *> *fields = [jsonString componentsSeparatedByString:@"|"];
+        
         FMNetWorthModel *netModel = [[FMNetWorthModel alloc] init];
         netModel.fundCode = fundCode;
-
-        // 用正则从 HTML 表格中提取 <td> 内容
-        NSError *regexError = nil;
-        NSRegularExpression *tdRegex = [NSRegularExpression regularExpressionWithPattern:@"<td[^>]*>([^<]*)</td>" options:0 error:&regexError];
-        NSArray<NSTextCheckingResult *> *matches = [tdRegex matchesInString:jsonString options:0 range:NSMakeRange(0, jsonString.length)];
-
-        // tbody 中第一行共 7 列：净值日期、单位净值、累计净值、日增长率、申购状态、赎回状态、分红送配
-        // thead 有 7 个 <th>，tbody 第一行从 index 7 开始
-        if (matches.count >= 3) {
-            NSString *date       = [jsonString substringWithRange:[matches[0] rangeAtIndex:1]];   // 净值日期
-            NSString *unitNet    = [jsonString substringWithRange:[matches[1] rangeAtIndex:1]];   // 单位净值
-            NSString *growthRate = [jsonString substringWithRange:[matches[3] rangeAtIndex:1]];  // 日增长率
-
-            netModel.netValueDate  = [date stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-            netModel.unitNetValue  = [unitNet stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-            netModel.growthRate    = [growthRate stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if (fields.count >= 11) {
+            netModel.netValueDate = fields[0];        // 净值日期
+            netModel.unitNetValue = fields[1];        // 单位净值
+            //netModel.accumulatedNetValue = fields[2]; // 累计净值
+            //netModel.netValueGrowth = fields[3];      // 净值增长
+            netModel.growthRate = fields[4];          // 净值增长率
+            netModel.estimateGrowthRate = fields[5];  // 估算增长率
+            //netModel.estimateGrowth = fields[6];      // 估算增长额
+            netModel.estimateNetValue = fields[7];    // 估算净值
+            //netModel.previousNetValue = fields[8];    // 前一日净值
+            netModel.estimateDate = fields[9];        // 估值日期
+            netModel.estimateTime = fields[10];       // 估值时间
         }
-
+        
         dispatch_async(dispatch_get_main_queue(), ^{
             if (success) {
                 success(netModel);
             }
         });
-
+        
     } failure:^(NSError * _Nonnull error) {
         dispatch_async(dispatch_get_main_queue(), ^{
             if (failure) {
@@ -461,75 +363,6 @@
 
     // 批量获取热门基金的实时估值
     [self fetchMultipleFundsEstimate:hotFundCodes success:success failure:failure];
-}
-
-- (void)fetchFundHistoryData:(NSString *)fundCode
-                    pageSize:(NSInteger)pageSize
-                     success:(FMNetworkSuccessBlock)success
-                     failure:(FMNetworkFailureBlock)failure {
-    if (!fundCode || fundCode.length == 0) {
-        if (failure) {
-            NSError *error = [NSError errorWithDomain:@"FMNetworkManager" code:-1 userInfo:@{NSLocalizedDescriptionKey: @"基金代码不能为空"}];
-            failure(error);
-        }
-        return;
-    }
-
-    // 天天基金历史净值API
-    // 接口地址: http://api.fund.eastmoney.com/f10/lsjz
-    // 参数: fundCode=基金代码&pageIndex=1&pageSize=数量&startDate=&endDate=
-    NSString *urlString = [NSString stringWithFormat:@"http://api.fund.eastmoney.com/f10/lsjz?callback=jQuery&fundCode=%@&PageIndex=1&PageSize=%ld", fundCode, (long)pageSize];
-
-    NSLog(@"📡 [历史数据] 请求URL: %@", urlString);
-
-    NSURL *url = [NSURL URLWithString:urlString];
-    NSURLRequest *request = [NSURLRequest requestWithURL:url];
-
-    NSURLSessionDataTask *task = [self.session dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
-        if (error) {
-            NSLog(@"❌ [历史数据] 网络请求失败URL: %@ \n%@", urlString, error.localizedDescription);
-            dispatch_async(dispatch_get_main_queue(), ^{
-                if (failure) {
-                    failure(error);
-                }
-            });
-            return;
-        }
-
-        if (!data) {
-            NSLog(@"❌ [历史数据] 未获取到数据");
-            dispatch_async(dispatch_get_main_queue(), ^{
-                if (failure) {
-                    NSError *err = [NSError errorWithDomain:@"FMNetworkManager" code:-1 userInfo:@{NSLocalizedDescriptionKey: @"未获取到数据"}];
-                    failure(err);
-                }
-            });
-            return;
-        }
-
-
-        // 打印原始响应（前500个字符）
-        NSString *rawResponse = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-
-        // 解析历史净值数据
-        NSArray *historyData = [self parseHistoryDataFromJSONP:data];
-
-        dispatch_async(dispatch_get_main_queue(), ^{
-            if (historyData && historyData.count > 0) {
-                if (success) {
-                    success(historyData);
-                }
-            } else {
-                NSLog(@"❌ [历史数据] 解析失败或数据为空");
-                if (failure) {
-                    NSError *err = [NSError errorWithDomain:@"FMNetworkManager" code:-1 userInfo:@{NSLocalizedDescriptionKey: @"解析历史数据失败"}];
-                    failure(err);
-                }
-            }
-        });
-    }];
-
-    [task resume];
 }
 
 // 获取全量基金
