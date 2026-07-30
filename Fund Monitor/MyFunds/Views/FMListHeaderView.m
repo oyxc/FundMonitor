@@ -44,18 +44,26 @@
 {
     _fund = fund;
     
-    NSString *estimateTime = fund.estimateTime?:@"--";
-    NSString *latestTime = fund.latestTime?:@"--";
-    if (estimateTime.length > 5) {
-        estimateTime = [estimateTime substringFromIndex:5];
-    }
-    if (latestTime.length > 5) {
-        latestTime = [latestTime substringFromIndex:5];
-    }
+    [self updateEstimateTime:fund.estimateTime latestTime:fund.latestTime];
+}
+
+- (void)updateEstimateTime:(NSString *)estimateTime latestTime:(NSString *)latestTime {
+    NSString *displayEstimateTime = [self displayTimeText:estimateTime];
+    NSString *displayLatestTime = [self displayTimeText:latestTime];
     
-    self.estimateDateLabel.text = estimateTime;
-    self.latestDateLabel.text = latestTime;    
-    self.profitDateLabel.text = latestTime;
+    self.estimateDateLabel.text = displayEstimateTime;
+    self.latestDateLabel.text = displayLatestTime;
+    self.profitDateLabel.text = displayLatestTime;
+}
+
+- (NSString *)displayTimeText:(NSString *)timeText {
+    if (timeText.length == 0) {
+        return @"--";
+    }
+    if (timeText.length > 5) {
+        return [timeText substringFromIndex:5];
+    }
+    return timeText;
 }
 
 - (void)setupUI {

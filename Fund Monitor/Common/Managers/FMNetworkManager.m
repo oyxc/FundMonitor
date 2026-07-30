@@ -81,7 +81,7 @@
         
         // 解析响应数据
         NSString *responseString = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-        NSLog(@"✅ 原始响应（前500字符） %@: \n%@...",fundCode, [responseString substringToIndex:500]);
+        NSLog(@"✅ 原始响应（前500字符） %@: \n%@...",fundCode, [responseString substringToIndex:MIN(responseString.length, 500)]);
         
         if (!responseString) {
             NSLog(@"❌ 无数据");
@@ -325,11 +325,16 @@
             netModel.estimateTime = fields[10];       // 估值时间
         }
         
-        dispatch_async(dispatch_get_main_queue(), ^{
+        [self fetchFundGZValue:fundCode netModel:netModel success:^(FMNetWorthModel *updatedModel) {
+            if (success) {
+                success(updatedModel);
+            }
+        } failure:^(NSError *error) {
+            NSLog(@"⚠️ 东方财富估值更新失败，使用基金速查网数据: %@", error.localizedDescription);
             if (success) {
                 success(netModel);
             }
-        });
+        }];
         
     } failure:^(NSError * _Nonnull error) {
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -338,6 +343,102 @@
             }
         });
     }];
+}
+
+// 东方财富-基金实时估值API
+- (void)fetchFundGZValue:(NSString *)fundCode
+                netModel:(FMNetWorthModel *)netModel
+                 success:(void(^)(FMNetWorthModel *updatedModel))success
+                 failure:(FMNetworkFailureBlock)failure {
+    NSString *urlString = [NSString stringWithFormat:@"https://api.fund.eastmoney.com/fund/fundgz?fundcode=%@", fundCode];
+    NSURL *url = [NSURL URLWithString:urlString];
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
+    [request setValue:@"https://fund.eastmoney.com/" forHTTPHeaderField:@"Referer"];
+    [request setValue:@"Mozilla/5.0" forHTTPHeaderField:@"User-Agent"];
+    
+    NSURLSessionDataTask *task = [self.session dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        NSLog(@"📡 东方财富估值请求URL: %@ \n%@", urlString, response);
+        
+        if (error) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (failure) {
+                    failure(error);
+                }
+            });
+            return;
+        }
+        
+        if (!data) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (failure) {
+                    NSError *err = [NSError errorWithDomain:@"FMNetworkManager" code:-1 userInfo:@{NSLocalizedDescriptionKey: @"东方财富估值未获取到数据"}];
+                    failure(err);
+                }
+            });
+            return;
+        }
+        
+        NSError *parseError = nil;
+        NSDictionary *jsonDict = [NSJSONSerialization JSONObjectWithData:data options:0 error:&parseError];
+        if (parseError || ![jsonDict isKindOfClass:[NSDictionary class]]) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (failure) {
+                    NSError *err = parseError ?: [NSError errorWithDomain:@"FMNetworkManager" code:-1 userInfo:@{NSLocalizedDescriptionKey: @"东方财富估值解析失败"}];
+                    failure(err);
+                }
+            });
+            return;
+        }
+        
+        NSArray *dataArray = jsonDict[@"Data"];
+        NSDictionary *fundGZInfo = ([dataArray isKindOfClass:[NSArray class]] && dataArray.count > 0) ? dataArray.firstObject : nil;
+        if (![fundGZInfo isKindOfClass:[NSDictionary class]]) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (failure) {
+                    NSError *err = [NSError errorWithDomain:@"FMNetworkManager" code:-1 userInfo:@{NSLocalizedDescriptionKey: @"东方财富估值数据为空"}];
+                    failure(err);
+                }
+            });
+            return;
+        }
+        
+        NSString *gsz = [self fm_stringValueFromObject:fundGZInfo[@"gsz"]];
+        NSString *gszzl = [self fm_stringValueFromObject:fundGZInfo[@"gszzl"]];
+        NSString *gztime = [self fm_stringValueFromObject:fundGZInfo[@"gztime"]];
+        
+        if (gsz.length > 0) {
+            netModel.estimateNetValue = gsz;
+        }
+        if (gszzl.length > 0) {
+            netModel.estimateGrowthRate = gszzl;
+        }
+        if (gztime.length > 0) {
+            netModel.estimateDate = gztime;
+            NSArray<NSString *> *timeComponents = [gztime componentsSeparatedByString:@" "];
+            netModel.estimateTime = timeComponents.count > 1 ? timeComponents.lastObject : gztime;
+        }
+        
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (success) {
+                success(netModel);
+            }
+        });
+    }];
+    
+    [task resume];
+}
+
+- (NSString *)fm_stringValueFromObject:(id)value {
+    if (!value || value == [NSNull null]) {
+        return nil;
+    }
+    if ([value isKindOfClass:[NSString class]]) {
+        return value;
+    }
+    if ([value respondsToSelector:@selector(stringValue)]) {
+        return [value stringValue];
+    }
+    return [value description];
 }
 
 - (void)fetchHotFunds:(FMNetworkSuccessBlock)success

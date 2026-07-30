@@ -214,8 +214,11 @@
 
     NSMutableArray *codes = [NSMutableArray array];
     for (FMFund *fund in self.funds) {
-        if (fund.fundCode.length) [codes addObject:fund.fundCode];
-        if (fund.valuationTrack.length) [codes addObject:fund.valuationTrack];
+        if (fund.valuationTrack.length) {
+            [codes addObject:fund.valuationTrack];
+        } else if (fund.fundCode.length) {
+            [codes addObject:fund.fundCode];
+        }
     }
     NSLog(@"开始读取");
     [self.indicatorView startAnimating];
@@ -327,7 +330,7 @@
             latestTimeFund = fund;
         }
         //筛选估值时间最新的数据
-        if (fund.estimateTimeInt > latestTimeFund.estimateTimeInt) {
+        if (fund.estimateTimeInt > estimateTimeFund.estimateTimeInt) {
             estimateTimeFund = fund;
         }
     }
@@ -342,6 +345,7 @@
     self.assetCardView.todayProfit = todayProfit;
     [self.assetCardView updateDateLabelWithTime:estimateTime];
     self.listHeaderView.fund = latestTimeFund;
+    [self.listHeaderView updateEstimateTime:estimateTimeFund.estimateTime latestTime:latestTimeFund.latestTime];
 
     if (totalAsset > 0) {
         self.assetCardView.todayProfitRate = (todayProfit / totalAsset) * 100.0;

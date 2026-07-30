@@ -25,6 +25,8 @@ typedef NS_ENUM(NSInteger, FMSortType) {
 
 @property (nonatomic, strong) FMFund *fund;
 
+- (void)updateEstimateTime:(NSString *)estimateTime latestTime:(NSString *)latestTime;
+
 @end
 
 NS_ASSUME_NONNULL_END
