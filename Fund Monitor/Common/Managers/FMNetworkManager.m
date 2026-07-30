@@ -81,12 +81,7 @@
         
         // 解析响应数据
         NSString *responseString = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-        NSLog(@"✅ 原始响应 %@: %@", fundCode, responseString);
-        if (responseString.length > 500) {
-            NSLog(@"✅ 原始响应（前500字符）: %@...", [responseString substringToIndex:500]);
-        } else {
-            NSLog(@"✅ 原始响应: %@", responseString);
-        }
+        NSLog(@"✅ 原始响应（前500字符） %@: \n%@...",fundCode, [responseString substringToIndex:500]);
         
         if (!responseString) {
             NSLog(@"❌ 无数据");
