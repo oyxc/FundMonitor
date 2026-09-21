@@ -357,6 +357,9 @@
 }
 
 - (void)parseHoldingsData:(NSString *)htmlString {
+    if (!htmlString || htmlString.length == 0) {
+        return;
+    }
     self.holdings = [NSMutableArray array];
     
     NSError *error;
